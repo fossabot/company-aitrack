@@ -95,10 +95,42 @@ func ComputeRequestSig(secret string, unixTS int64, bodyBytes []byte) string {
 
 // ─── Token provisioning ───────────────────────────────────────────────────────
 
-type TokenBundle struct {
-	Token      string `json:"token"`
-	HmacSecret string `json:"hmac_secret"`
+// tokenResponse is the raw POST /admin/tokens response (v1.2).
+type tokenResponse struct {
+	Credential string `json:"credential"`
 	TokenKey   string `json:"token_key"`
+}
+
+// TokenBundle holds the split credential fields for use by factory helpers.
+// The server returns a single "credential" = "<token>-<hmac_secret>"; we split
+// on the first "-" so factory internals (signing, record_sig) can use the parts.
+type TokenBundle struct {
+	Credential string // full credential string as returned by server
+	Token      string // split: everything before the first "-"
+	HmacSecret string // split: everything after the first "-"
+	TokenKey   string // token_key masked identifier from response
+}
+
+// SplitCredential parses a credential string ("<token>-<hmac_secret>") and
+// returns a populated TokenBundle. Splitting is done on the first "-" only,
+// which is safe because token = "aitrack_<hex>" contains no "-".
+func SplitCredential(credential, tokenKey string) TokenBundle {
+	idx := strings.Index(credential, "-")
+	var token, secret string
+	if idx >= 0 {
+		token = credential[:idx]
+		secret = credential[idx+1:]
+	} else {
+		// Malformed credential — keep full string as token; secret empty.
+		token = credential
+		secret = ""
+	}
+	return TokenBundle{
+		Credential: credential,
+		Token:      token,
+		HmacSecret: secret,
+		TokenKey:   tokenKey,
+	}
 }
 
 // ─── Edit payload builders ────────────────────────────────────────────────────

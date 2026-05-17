@@ -87,9 +87,9 @@ func (s *TokenService) CreateToken(req *model.CreateTokenRequest) (*model.Create
 	if err := s.repo.Save(t); err != nil {
 		return nil, fmt.Errorf("save token: %w", err)
 	}
+	credential := rawToken + "-" + hmacSecret
 	return &model.CreateTokenResponse{
-		Token:      rawToken,
-		HmacSecret: hmacSecret,
+		Credential: credential,
 		TokenKey:   tokenKey,
 	}, nil
 }

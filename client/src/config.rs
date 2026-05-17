@@ -10,9 +10,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
-    pub token: String,
+    pub credential: String,
     pub device_id: String,
-    pub hmac_secret: String,
 }
 
 pub fn config_dir() -> PathBuf {
@@ -79,10 +78,30 @@ pub fn ensure_device_id(cfg: &mut Config) -> Result<bool> {
     Ok(false)
 }
 
-/// Resolve api_url and token: CLI args > env vars > config file.
+/// Split a credential string on the **first** `-`.
+///
+/// Format: `"<token>-<hmac_secret>"` where `token = aitrack_<hex>` (contains no `-`).
+/// Returns `(token, hmac_secret)` on success, or an error if no `-` is found.
+///
+/// # Errors
+/// Returns `Err` when the credential contains no `-` separator (malformed credential).
+pub fn split_credential(credential: &str) -> Result<(String, String)> {
+    match credential.find('-') {
+        Some(pos) => {
+            let token = credential[..pos].to_string();
+            let hmac_secret = credential[pos + 1..].to_string();
+            Ok((token, hmac_secret))
+        }
+        None => anyhow::bail!(
+            "malformed credential: expected \"<token>-<hmac_secret>\" but found no '-' separator"
+        ),
+    }
+}
+
+/// Resolve api_url and credential: CLI args > env vars > config file.
 pub fn resolve_api_config(
     cli_url: Option<String>,
-    cli_token: Option<String>,
+    cli_credential: Option<String>,
 ) -> (String, String) {
     let file_cfg = load_config();
 
@@ -90,29 +109,27 @@ pub fn resolve_api_config(
         .or_else(|| std::env::var("AITRACK_API_URL").ok())
         .unwrap_or(file_cfg.api_url);
 
-    let token = cli_token
-        .or_else(|| std::env::var("AITRACK_API_TOKEN").ok())
-        .unwrap_or(file_cfg.token);
+    let credential = cli_credential
+        .or_else(|| std::env::var("AITRACK_CREDENTIAL").ok())
+        .unwrap_or(file_cfg.credential);
 
-    (api_url, token)
+    (api_url, credential)
 }
 
 /// Apply CLI-provided init args into config and persist.
 pub fn apply_init_args(
     api_url: Option<String>,
-    api_token: Option<String>,
-    hmac_secret: Option<String>,
+    credential: Option<String>,
 ) -> Result<Config> {
     let mut cfg = load_config();
 
     if let Some(u) = api_url {
         cfg.api_url = u;
     }
-    if let Some(t) = api_token {
-        cfg.token = t;
-    }
-    if let Some(s) = hmac_secret {
-        cfg.hmac_secret = s;
+    if let Some(c) = credential {
+        // Validate that the credential is well-formed before storing it.
+        split_credential(&c)?;
+        cfg.credential = c;
     }
     ensure_device_id(&mut cfg)?;
     save_config(&cfg)?;
@@ -163,15 +180,67 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cfg = Config {
             api_url: "https://example.com".to_string(),
-            token: "aitrack_abc123def456".to_string(),
+            credential: "aitrack_abc123def456-mysecret".to_string(),
             device_id: "test-device".to_string(),
-            hmac_secret: "secret".to_string(),
         };
         let path = dir.path().join("config.toml");
         let text = toml::to_string(&cfg).unwrap();
         std::fs::write(&path, text).unwrap();
         f(dir.path());
     }
+
+    // -------------------------------------------------------------------------
+    // split_credential
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn split_credential_well_formed() {
+        let (token, secret) = split_credential("aitrack_abc123-mysecret").unwrap();
+        assert_eq!(token, "aitrack_abc123");
+        assert_eq!(secret, "mysecret");
+    }
+
+    #[test]
+    fn split_credential_splits_on_first_dash() {
+        // hmac_secret itself may contain dashes
+        let (token, secret) = split_credential("aitrack_abc123-secret-with-dashes").unwrap();
+        assert_eq!(token, "aitrack_abc123");
+        assert_eq!(secret, "secret-with-dashes");
+    }
+
+    #[test]
+    fn split_credential_no_dash_returns_error() {
+        let result = split_credential("nodashhere");
+        assert!(result.is_err(), "credential without '-' must return error");
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("malformed credential"), "error message should mention 'malformed credential', got: {msg}");
+    }
+
+    #[test]
+    fn split_credential_empty_string_returns_error() {
+        let result = split_credential("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn split_credential_leading_dash_gives_empty_token() {
+        // Edge case: "-secret" → token = "", hmac_secret = "secret"
+        let (token, secret) = split_credential("-secret").unwrap();
+        assert_eq!(token, "");
+        assert_eq!(secret, "secret");
+    }
+
+    #[test]
+    fn split_credential_trailing_dash_gives_empty_secret() {
+        // Edge case: "aitrack_abc-" → token = "aitrack_abc", hmac_secret = ""
+        let (token, secret) = split_credential("aitrack_abc-").unwrap();
+        assert_eq!(token, "aitrack_abc");
+        assert_eq!(secret, "");
+    }
+
+    // -------------------------------------------------------------------------
+    // mask_token
+    // -------------------------------------------------------------------------
 
     #[test]
     fn mask_token_short_returns_legacy() {
@@ -216,15 +285,18 @@ mod tests {
         assert!(masked.contains('\u{2026}'), "expected ellipsis, got: {masked}");
     }
 
+    // -------------------------------------------------------------------------
+    // save / load / roundtrip
+    // -------------------------------------------------------------------------
+
     #[test]
     fn save_and_load_config_roundtrip() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("config.toml");
         let cfg = Config {
             api_url: "https://test.example.com".to_string(),
-            token: "aitrack_testtoken123456".to_string(),
+            credential: "aitrack_testtoken123456-my-hmac-secret".to_string(),
             device_id: "device-uuid-here".to_string(),
-            hmac_secret: "my-hmac-secret".to_string(),
         };
         let text = toml::to_string(&cfg).unwrap();
         std::fs::write(&path, &text).unwrap();
@@ -232,9 +304,8 @@ mod tests {
         // Verify toml roundtrip
         let loaded: Config = toml::from_str(&text).unwrap();
         assert_eq!(loaded.api_url, cfg.api_url);
-        assert_eq!(loaded.token, cfg.token);
+        assert_eq!(loaded.credential, cfg.credential);
         assert_eq!(loaded.device_id, cfg.device_id);
-        assert_eq!(loaded.hmac_secret, cfg.hmac_secret);
     }
 
     #[test]
@@ -253,9 +324,8 @@ mod tests {
     fn config_default_is_all_empty() {
         let cfg = Config::default();
         assert!(cfg.api_url.is_empty());
-        assert!(cfg.token.is_empty());
+        assert!(cfg.credential.is_empty());
         assert!(cfg.device_id.is_empty());
-        assert!(cfg.hmac_secret.is_empty());
     }
 
     #[test]
@@ -277,26 +347,26 @@ mod tests {
     fn resolve_api_config_prefers_cli_args() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::remove_var("AITRACK_API_URL");
-        std::env::remove_var("AITRACK_API_TOKEN");
-        let (url, token) = resolve_api_config(
+        std::env::remove_var("AITRACK_CREDENTIAL");
+        let (url, credential) = resolve_api_config(
             Some("https://cli.example.com".to_string()),
-            Some("cli-token".to_string()),
+            Some("aitrack_abc-secret".to_string()),
         );
         assert_eq!(url, "https://cli.example.com");
-        assert_eq!(token, "cli-token");
+        assert_eq!(credential, "aitrack_abc-secret");
     }
 
     #[test]
     fn resolve_api_config_falls_back_to_env() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::remove_var("AITRACK_API_URL");
-        std::env::remove_var("AITRACK_API_TOKEN");
-        let (url, token) = resolve_api_config(
+        std::env::remove_var("AITRACK_CREDENTIAL");
+        let (url, credential) = resolve_api_config(
             Some("https://override.example.com".to_string()),
-            Some("override-token".to_string()),
+            Some("aitrack_override-overridesecret".to_string()),
         );
         assert_eq!(url, "https://override.example.com");
-        assert_eq!(token, "override-token");
+        assert_eq!(credential, "aitrack_override-overridesecret");
     }
 
     #[test]
@@ -306,16 +376,14 @@ mod tests {
             assert!(path.exists());
             let text = std::fs::read_to_string(&path).unwrap();
             assert!(text.contains("api_url"));
+            assert!(text.contains("credential"));
         });
     }
 
     #[test]
     fn config_paths_are_under_home_aitrack() {
         // This test asserts the *default* (~/.aitrack) path layout, which only
-        // holds when AITRACK_HOME is unset. It reads process-global env state, so
-        // it must hold ENV_LOCK and clear AITRACK_HOME — otherwise a concurrent
-        // test that sets AITRACK_HOME to a tempdir makes config_dir() return that
-        // tempdir and the ".aitrack" assertion fails intermittently.
+        // holds when AITRACK_HOME is unset.
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::remove_var("AITRACK_HOME");
 
@@ -343,16 +411,14 @@ mod tests {
         // Test the serialization logic without hitting real paths
         let cfg = Config {
             api_url: "https://roundtrip.example.com".to_string(),
-            token: "aitrack_roundtriptoken12345".to_string(),
+            credential: "aitrack_roundtriptoken12345-roundtriphmacsecret".to_string(),
             device_id: "device-roundtrip-1234".to_string(),
-            hmac_secret: "hmac-roundtrip-secret".to_string(),
         };
         let serialized = toml::to_string(&cfg).unwrap();
         let deserialized: Config = toml::from_str(&serialized).unwrap();
         assert_eq!(deserialized.api_url, cfg.api_url);
-        assert_eq!(deserialized.token, cfg.token);
+        assert_eq!(deserialized.credential, cfg.credential);
         assert_eq!(deserialized.device_id, cfg.device_id);
-        assert_eq!(deserialized.hmac_secret, cfg.hmac_secret);
     }
 
     #[test]
@@ -388,12 +454,10 @@ mod tests {
     #[test]
     fn ensure_device_id_no_op_when_already_set() {
         // When device_id is non-empty, ensure_device_id returns Ok(false)
-        // We test the branch logic directly without hitting filesystem
         let cfg = Config {
             device_id: "already-set".to_string(),
             ..Config::default()
         };
-        // The function checks if device_id.is_empty() → false path returns Ok(false)
         assert!(!cfg.device_id.is_empty());
     }
 
@@ -402,29 +466,23 @@ mod tests {
         // Test the logic: only Some fields update config
         let mut cfg = Config {
             api_url: "old-url".to_string(),
-            token: "old-token".to_string(),
-            hmac_secret: "old-secret".to_string(),
+            credential: "aitrack_oldtoken-oldsecret".to_string(),
             device_id: "device-1".to_string(),
         };
-        // Simulate apply_init_args logic for Some(url), None token, None secret
+        // Simulate apply_init_args logic for Some(url), None credential
         let api_url = Some("new-url".to_string());
-        let api_token: Option<String> = None;
-        let hmac_secret: Option<String> = None;
+        let new_credential: Option<String> = None;
 
         if let Some(u) = api_url { cfg.api_url = u; }
-        if let Some(t) = api_token { cfg.token = t; }
-        if let Some(s) = hmac_secret { cfg.hmac_secret = s; }
+        if let Some(c) = new_credential { cfg.credential = c; }
 
         assert_eq!(cfg.api_url, "new-url");
-        assert_eq!(cfg.token, "old-token"); // unchanged
-        assert_eq!(cfg.hmac_secret, "old-secret"); // unchanged
+        assert_eq!(cfg.credential, "aitrack_oldtoken-oldsecret"); // unchanged
     }
 
     // -------------------------------------------------------------------------
     // AITRACK_HOME-isolated tests: exercise save_config / load_config /
     // apply_init_args / ensure_device_id against a real tempdir.
-    // These tests are run single-threaded by cargo test (default), so the
-    // process-global env var mutation is safe.
     // -------------------------------------------------------------------------
 
     #[test]
@@ -433,9 +491,8 @@ mod tests {
         with_aitrack_home(&dir, |home| {
             let cfg = Config {
                 api_url: "https://save.example.com".to_string(),
-                token: "aitrack_savetoken12345".to_string(),
+                credential: "aitrack_savetoken12345-savesecret".to_string(),
                 device_id: "save-device".to_string(),
-                hmac_secret: "save-secret".to_string(),
             };
             save_config(&cfg).unwrap();
 
@@ -456,17 +513,15 @@ mod tests {
         with_aitrack_home(&dir, |_| {
             let original = Config {
                 api_url: "https://load.example.com".to_string(),
-                token: "aitrack_loadtoken123456".to_string(),
+                credential: "aitrack_loadtoken123456-loadsecret".to_string(),
                 device_id: "load-device".to_string(),
-                hmac_secret: "load-secret".to_string(),
             };
             save_config(&original).unwrap();
 
             let loaded = load_config();
             assert_eq!(loaded.api_url, original.api_url);
-            assert_eq!(loaded.token, original.token);
+            assert_eq!(loaded.credential, original.credential);
             assert_eq!(loaded.device_id, original.device_id);
-            assert_eq!(loaded.hmac_secret, original.hmac_secret);
         });
     }
 
@@ -477,7 +532,7 @@ mod tests {
             // No file written → should return Default
             let cfg = load_config();
             assert!(cfg.api_url.is_empty());
-            assert!(cfg.token.is_empty());
+            assert!(cfg.credential.is_empty());
             assert!(cfg.device_id.is_empty());
         });
     }
@@ -533,20 +588,17 @@ mod tests {
         with_aitrack_home(&dir, |_| {
             let result = apply_init_args(
                 Some("https://apply.example.com".to_string()),
-                Some("aitrack_applytoken12345".to_string()),
-                Some("apply-hmac-secret".to_string()),
+                Some("aitrack_applytoken12345-applyhmacsecret".to_string()),
             ).unwrap();
 
             assert_eq!(result.api_url, "https://apply.example.com");
-            assert_eq!(result.token, "aitrack_applytoken12345");
-            assert_eq!(result.hmac_secret, "apply-hmac-secret");
+            assert_eq!(result.credential, "aitrack_applytoken12345-applyhmacsecret");
             assert!(!result.device_id.is_empty(), "device_id should be auto-generated");
 
             // Load from disk and verify persistence
             let loaded = load_config();
             assert_eq!(loaded.api_url, "https://apply.example.com");
-            assert_eq!(loaded.token, "aitrack_applytoken12345");
-            assert_eq!(loaded.hmac_secret, "apply-hmac-secret");
+            assert_eq!(loaded.credential, "aitrack_applytoken12345-applyhmacsecret");
         });
     }
 
@@ -557,17 +609,25 @@ mod tests {
             // Pre-populate config
             let existing = Config {
                 api_url: "https://existing.example.com".to_string(),
-                token: "aitrack_existingtoken123".to_string(),
+                credential: "aitrack_existingtoken123-existingsecret".to_string(),
                 device_id: "existing-device".to_string(),
-                hmac_secret: "existing-secret".to_string(),
             };
             save_config(&existing).unwrap();
 
             // Call apply_init_args with all None → should preserve existing values
-            let result = apply_init_args(None, None, None).unwrap();
+            let result = apply_init_args(None, None).unwrap();
             assert_eq!(result.api_url, "https://existing.example.com");
-            assert_eq!(result.token, "aitrack_existingtoken123");
-            assert_eq!(result.hmac_secret, "existing-secret");
+            assert_eq!(result.credential, "aitrack_existingtoken123-existingsecret");
+        });
+    }
+
+    #[test]
+    fn apply_init_args_malformed_credential_returns_error() {
+        let dir = TempDir::new().unwrap();
+        with_aitrack_home(&dir, |_| {
+            // Credential without '-' separator is malformed
+            let result = apply_init_args(None, Some("nodashcredential".to_string()));
+            assert!(result.is_err(), "malformed credential should return error");
         });
     }
 
@@ -592,18 +652,29 @@ mod tests {
         // with_aitrack_home holds ENV_LOCK, so the remove_vars inside are safe
         with_aitrack_home(&dir, |_| {
             std::env::remove_var("AITRACK_API_URL");
-            std::env::remove_var("AITRACK_API_TOKEN");
+            std::env::remove_var("AITRACK_CREDENTIAL");
             let cfg = Config {
                 api_url: "https://file.example.com".to_string(),
-                token: "aitrack_filetoken123456".to_string(),
+                credential: "aitrack_filetoken123456-filesecret".to_string(),
                 ..Config::default()
             };
             save_config(&cfg).unwrap();
 
-            let (url, token) = resolve_api_config(None, None);
+            let (url, credential) = resolve_api_config(None, None);
             assert_eq!(url, "https://file.example.com");
-            assert_eq!(token, "aitrack_filetoken123456");
+            assert_eq!(credential, "aitrack_filetoken123456-filesecret");
         });
     }
-}
 
+    #[test]
+    fn resolve_api_config_uses_env_var_aitrack_credential() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::remove_var("AITRACK_API_URL");
+        std::env::set_var("AITRACK_CREDENTIAL", "aitrack_envtoken-envsecret");
+
+        let (_, credential) = resolve_api_config(None, None);
+        std::env::remove_var("AITRACK_CREDENTIAL");
+
+        assert_eq!(credential, "aitrack_envtoken-envsecret");
+    }
+}

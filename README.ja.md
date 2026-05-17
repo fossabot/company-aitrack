@@ -107,14 +107,14 @@ docker-compose up -d --build
 curl http://localhost:8080/actuator/health
 ```
 
-### 2. トークンの発行
+### 2. クレデンシャルの発行
 
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"macbook"}'
-# token と hmac_secret が返される — 一度のみ表示、安全に保管すること
+# credential と token_key が返される — credential は一度のみ表示、安全に保管すること
 ```
 
 ### 3. 開発者側のフックインストール
@@ -127,8 +127,7 @@ cd client && cargo build --release
 # Claude Code フックのインストール
 aitrack init --claude \
   --api-url https://aitrack.example.com \
-  --api-token <token> \
-  --hmac-secret <hmac_secret>
+  --credential <credential>
 
 # ステータスの確認
 aitrack status

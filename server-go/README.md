@@ -71,10 +71,10 @@ Request headers: `X-Admin-Key: <admin_key>`
 
 Response:
 ```json
-{"token": "aitrack_...", "hmac_secret": "...", "token_key": "abcdef…7890"}
+{"credential": "aitrack_...-...", "token_key": "abcdef…7890"}
 ```
 
-`token` and `hmac_secret` are shown only once. Store them in `~/.aitrack/config.toml`.
+`credential` is shown only once. Store it in `~/.aitrack/config.toml` under the `credential` key.
 
 ### POST /api/v1/ai-track/edits
 

@@ -107,14 +107,14 @@ docker-compose up -d --build
 curl http://localhost:8080/actuator/health
 ```
 
-### 2. 签发 token
+### 2. 签发 credential
 
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"macbook"}'
-# 返回 token 和 hmac_secret，仅显示一次，请妥善保存
+# 返回 credential 和 token_key，credential 仅显示一次，请妥善保存
 ```
 
 ### 3. 开发者侧安装钩子
@@ -127,8 +127,7 @@ cd client && cargo build --release
 # 安装 Claude Code 钩子
 aitrack init --claude \
   --api-url https://aitrack.example.com \
-  --api-token <token> \
-  --hmac-secret <hmac_secret>
+  --credential <credential>
 
 # 验证状态
 aitrack status

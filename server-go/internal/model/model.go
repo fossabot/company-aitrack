@@ -33,8 +33,8 @@ type EditRecord struct {
 	Metadata     string    `json:"metadata"`
 	Timestamp    string    `json:"timestamp"`
 	RecordSig    string    `json:"record_sig"`
-	Status       string    `json:"status"`  // ACCEPTED, FLAGGED, REJECTED
-	Flags        string    `json:"flags"`   // comma-separated
+	Status       string    `json:"status"` // ACCEPTED, FLAGGED, REJECTED
+	Flags        string    `json:"flags"`  // comma-separated
 	ReceivedAt   time.Time `json:"received_at"`
 }
 
@@ -57,8 +57,7 @@ type CreateTokenRequest struct {
 }
 
 type CreateTokenResponse struct {
-	Token      string `json:"token"`
-	HmacSecret string `json:"hmac_secret"`
+	Credential string `json:"credential"`
 	TokenKey   string `json:"token_key"`
 }
 

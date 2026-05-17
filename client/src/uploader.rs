@@ -4,7 +4,7 @@ use reqwest::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{load_config, mask_token};
+use crate::config::{load_config, mask_token, split_credential};
 use crate::crypto::compute_request_sig;
 use crate::db::{fetch_unsynced, increment_retry, mark_synced};
 
@@ -59,15 +59,27 @@ struct IndexedItem {
     reason: Option<String>,
 }
 
-pub async fn flush_unsynced(conn: &Connection, api_url: &str, token: &str) -> Result<()> {
+/// Flush unsynced records to the server.
+///
+/// `credential` is the combined `"<token>-<hmac_secret>"` string.  The token is
+/// extracted internally for the `Authorization` header; the hmac_secret is used
+/// for request signing and never sent over the wire.
+pub async fn flush_unsynced(conn: &Connection, api_url: &str, credential: &str) -> Result<()> {
     if api_url.starts_with("http://") {
         eprintln!("[aitrack] WARNING: api_url uses plaintext HTTP; token will be sent unencrypted");
     }
 
+    let (token, hmac_secret) = match split_credential(credential) {
+        Ok(parts) => parts,
+        Err(e) => {
+            eprintln!("[aitrack] invalid credential: {e}");
+            return Ok(());
+        }
+    };
+
     let cfg = load_config();
-    let token_key = mask_token(token);
+    let token_key = mask_token(&token);
     let device_id = cfg.device_id.clone();
-    let hmac_secret = cfg.hmac_secret.clone();
 
     let rows = fetch_unsynced(conn, &token_key, BATCH_LIMIT)?;
     if rows.is_empty() {
@@ -228,6 +240,10 @@ mod tests {
         conn
     }
 
+    /// Test credential: token part is "aitrack_testtoken12345", hmac_secret is "testhmacsecret"
+    const TEST_CREDENTIAL: &str = "aitrack_testtoken12345-testhmacsecret";
+    const TEST_TOKEN: &str = "aitrack_testtoken12345";
+
     fn insert_factory_record(conn: &Connection, seed: u64, token: &str) -> i64 {
         let masked = mask_token(token);
         let rec = EditRecordFactory::new(seed)
@@ -243,7 +259,7 @@ mod tests {
     async fn flush_empty_db_is_noop() {
         let conn = open_test_db();
         // No records → flush should return Ok without making HTTP calls
-        flush_unsynced(&conn, "http://localhost:9999", "aitrack_testtoken12345").await.unwrap();
+        flush_unsynced(&conn, "http://localhost:9999", TEST_CREDENTIAL).await.unwrap();
     }
 
     #[tokio::test]
@@ -261,13 +277,12 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        insert_factory_record(&conn, 1, token);
+        insert_factory_record(&conn, 1, TEST_TOKEN);
 
-        let masked = mask_token(token);
+        let masked = mask_token(TEST_TOKEN);
         assert_eq!(pending_count(&conn, &masked), 1);
 
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         assert_eq!(pending_count(&conn, &masked), 0, "accepted → synced");
     }
@@ -287,11 +302,10 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        insert_factory_record(&conn, 2, token);
+        insert_factory_record(&conn, 2, TEST_TOKEN);
 
-        let masked = mask_token(token);
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        let masked = mask_token(TEST_TOKEN);
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         // Still unsynced (retry_count=1, not yet at 5)
         assert_eq!(pending_count(&conn, &masked), 1, "rejected → still pending");
@@ -315,11 +329,10 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        insert_factory_record(&conn, 3, token);
-        let masked = mask_token(token);
+        insert_factory_record(&conn, 3, TEST_TOKEN);
+        let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         // flagged → synced per contract
         assert_eq!(pending_count(&conn, &masked), 0, "flagged → synced");
@@ -335,11 +348,10 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        insert_factory_record(&conn, 4, token);
-        let masked = mask_token(token);
+        insert_factory_record(&conn, 4, TEST_TOKEN);
+        let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
         assert_eq!(rows[0].retry_count, 1, "HTTP 500 → retry incremented");
@@ -348,12 +360,11 @@ mod tests {
     #[tokio::test]
     async fn flush_connection_error_increments_retry() {
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        insert_factory_record(&conn, 5, token);
-        let masked = mask_token(token);
+        insert_factory_record(&conn, 5, TEST_TOKEN);
+        let masked = mask_token(TEST_TOKEN);
 
         // Use an invalid URL → connection error
-        flush_unsynced(&conn, "http://127.0.0.1:1", token).await.unwrap();
+        flush_unsynced(&conn, "http://127.0.0.1:1", TEST_CREDENTIAL).await.unwrap();
 
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
         assert_eq!(rows[0].retry_count, 1, "connection error → retry incremented");
@@ -374,13 +385,12 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
         // Insert 2 records (different seeds so different file paths — avoid dedup)
-        insert_factory_record(&conn, 10, token);
-        insert_factory_record(&conn, 11, token);
-        let masked = mask_token(token);
+        insert_factory_record(&conn, 10, TEST_TOKEN);
+        insert_factory_record(&conn, 11, TEST_TOKEN);
+        let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         // index 0 → accepted → synced; index 1 → rejected → retry
         // One still pending
@@ -398,11 +408,10 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        let token = "aitrack_testtoken12345";
-        let id = insert_factory_record(&conn, 6, token);
-        let masked = mask_token(token);
+        let id = insert_factory_record(&conn, 6, TEST_TOKEN);
+        let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
 
         // Fallback: mark_synced all ids
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
@@ -499,8 +508,7 @@ mod tests {
         record.repo_url = "git@github.com:org/repo.git".to_string();
         record.branch = "main".to_string();
         record.current_sha = "aabbccdd".to_string();
-        let token = "aitrack_testtoken12345";
-        let token_key = crate::config::mask_token(token);
+        let token_key = crate::config::mask_token(TEST_TOKEN);
         record.token_key = token_key.clone();
         record.device_id = "device-chain-test".to_string();
         record.hostname = "chain-test-host".to_string();
@@ -537,7 +545,7 @@ mod tests {
         assert_eq!(pending_count(&conn, &token_key), 1);
 
         // 7. Upload and verify synced
-        flush_unsynced(&conn, &mock_server.uri(), token).await.unwrap();
+        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
         assert_eq!(pending_count(&conn, &token_key), 0, "after accepted upload: synced");
 
         // old has 1 line ("fn old()"), new has 2 lines ("fn new()" + "fn added()")
@@ -554,7 +562,7 @@ mod tests {
         use crate::testkit::factories::tampered_oversized_lines;
         let conn = open_test_db();
         let rec = tampered_oversized_lines(77);
-        let masked = crate::config::mask_token("aitrack_testtoken12345");
+        let masked = crate::config::mask_token(TEST_TOKEN);
         let mut rec = rec;
         rec.token_key = masked.clone();
         rec.repo_url = "git@github.com:org/repo.git".to_string();

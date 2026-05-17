@@ -21,8 +21,10 @@ public class TokenService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
-     * Issues a new token + hmac_secret pair. Returns plaintext token (only shown once).
-     * The hmac_secret is AES-256-GCM encrypted before persisting.
+     * Issues a new token + hmac_secret pair. Stores them internally as usual
+     * (token sha256 hash + encrypted hmac_secret), but returns a single combined
+     * credential string: {@code "<token>-<hmac_secret>"}.
+     * The two parts are NOT returned as separate fields (v1.2 contract).
      */
     @Transactional
     public CreateTokenResponse createToken(CreateTokenRequest req) {
@@ -40,7 +42,10 @@ public class TokenService {
         entity.setActive(true);
         tokenRepository.save(entity);
 
-        return new CreateTokenResponse(rawToken, hmacSecret, tokenKey);
+        // v1.2: return a single opaque credential = "<token>-<hmac_secret>"
+        // token is "aitrack_<hex>" which never contains '-', so split on first '-' recovers both parts
+        String credential = rawToken + "-" + hmacSecret;
+        return new CreateTokenResponse(credential, tokenKey);
     }
 
     /**

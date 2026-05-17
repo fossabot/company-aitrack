@@ -175,7 +175,6 @@ func TestCountByTokenKeyAndFilePath(t *testing.T) {
 	}
 }
 
-
 func TestStatsService_AllGroupBys(t *testing.T) {
 	db := openTestDB(t)
 	editRepo := service.NewEditRecordRepository(db)

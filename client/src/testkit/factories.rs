@@ -126,29 +126,51 @@ impl EditRecordFactory {
 pub struct ApiConfigFactory {
     pub seed: u64,
     pub api_url: Option<String>,
-    pub token: Option<String>,
+    /// Combined credential string: `"<token>-<hmac_secret>"`.
+    pub credential: Option<String>,
     pub device_id: Option<String>,
+    /// Convenience: set the hmac_secret half of the credential.
+    /// If both `credential` and `hmac_secret` are set, `hmac_secret` takes precedence
+    /// by combining with the default token.
     pub hmac_secret: Option<String>,
 }
 
 impl ApiConfigFactory {
     pub fn new(seed: u64) -> Self {
-        Self { seed, api_url: None, token: None, device_id: None, hmac_secret: None }
+        Self { seed, api_url: None, credential: None, device_id: None, hmac_secret: None }
     }
 
     pub fn with_api_url(mut self, v: &str) -> Self { self.api_url = Some(v.to_string()); self }
-    pub fn with_token(mut self, v: &str) -> Self { self.token = Some(v.to_string()); self }
+    /// Set the full combined credential `"<token>-<hmac_secret>"`.
+    pub fn with_credential(mut self, v: &str) -> Self { self.credential = Some(v.to_string()); self }
     pub fn with_device_id(mut self, v: &str) -> Self { self.device_id = Some(v.to_string()); self }
+    /// Convenience: only set the hmac_secret portion; the default seed-derived token is used.
     pub fn with_hmac_secret(mut self, v: &str) -> Self { self.hmac_secret = Some(v.to_string()); self }
 
     pub fn build(self) -> Config {
         let s = self.seed;
+        let default_token = format!("aitrack_{s:016x}abcdef");
+        let credential = if let Some(c) = self.credential {
+            c
+        } else {
+            let secret = self.hmac_secret.unwrap_or_else(|| format!("secret-{s:016x}"));
+            format!("{default_token}-{secret}")
+        };
         Config {
             api_url: self.api_url.unwrap_or_else(|| format!("https://api-{s}.example.com")),
-            token: self.token.unwrap_or_else(|| format!("aitrack_{s:016x}abcdef")),
+            credential,
             device_id: self.device_id.unwrap_or_else(|| seed_uuid(s)),
-            hmac_secret: self.hmac_secret.unwrap_or_else(|| format!("secret-{s:016x}")),
         }
+    }
+
+    /// Helper: extract the token from the built credential (for tests that need it).
+    pub fn token_for_seed(seed: u64) -> String {
+        format!("aitrack_{seed:016x}abcdef")
+    }
+
+    /// Helper: extract the hmac_secret from the built credential (for tests that need it).
+    pub fn hmac_secret_for_seed(seed: u64) -> String {
+        format!("secret-{seed:016x}")
     }
 }
 
@@ -409,27 +431,47 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn api_config_factory_all_builders() {
+    fn api_config_factory_all_builders_via_credential() {
         let cfg = ApiConfigFactory::new(10)
             .with_api_url("https://custom.example.com")
-            .with_token("aitrack_customtoken12345")
+            .with_credential("aitrack_customtoken12345-custom-hmac-secret")
             .with_device_id("custom-device-id")
-            .with_hmac_secret("custom-hmac-secret")
             .build();
 
         assert_eq!(cfg.api_url, "https://custom.example.com");
-        assert_eq!(cfg.token, "aitrack_customtoken12345");
+        assert_eq!(cfg.credential, "aitrack_customtoken12345-custom-hmac-secret");
         assert_eq!(cfg.device_id, "custom-device-id");
-        assert_eq!(cfg.hmac_secret, "custom-hmac-secret");
+
+        // Verify split works
+        use crate::config::split_credential;
+        let (token, secret) = split_credential(&cfg.credential).unwrap();
+        assert_eq!(token, "aitrack_customtoken12345");
+        assert_eq!(secret, "custom-hmac-secret");
+    }
+
+    #[test]
+    fn api_config_factory_with_hmac_secret_convenience() {
+        // with_hmac_secret sets only the secret half; token is seed-derived
+        let cfg = ApiConfigFactory::new(10)
+            .with_hmac_secret("factory-secret")
+            .build();
+        use crate::config::split_credential;
+        let (token, secret) = split_credential(&cfg.credential).unwrap();
+        assert!(token.starts_with("aitrack_"));
+        assert_eq!(secret, "factory-secret");
     }
 
     #[test]
     fn api_config_factory_defaults() {
         let cfg = ApiConfigFactory::new(99).build();
         assert!(cfg.api_url.contains("99"));
-        assert!(cfg.token.starts_with("aitrack_"));
+        assert!(!cfg.credential.is_empty());
         assert!(!cfg.device_id.is_empty());
-        assert!(!cfg.hmac_secret.is_empty());
+        // Verify credential is well-formed
+        use crate::config::split_credential;
+        let (token, secret) = split_credential(&cfg.credential).unwrap();
+        assert!(token.starts_with("aitrack_"), "token should start with aitrack_");
+        assert!(!secret.is_empty(), "hmac_secret should not be empty");
     }
 
     // ---------------------------------------------------------------------------

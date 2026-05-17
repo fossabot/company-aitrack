@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,14 +71,18 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatalf("create test token: %v", err)
 	}
+	credParts := strings.SplitN(resp.Credential, "-", 2)
+	if len(credParts) != 2 {
+		t.Fatalf("unexpected credential format: %q", resp.Credential)
+	}
 
 	return &testEnv{
 		router:     router,
 		tokenSvc:   tokenSvc,
 		sig:        sig,
 		cfg:        cfg,
-		rawToken:   resp.Token,
-		hmacSecret: resp.HmacSecret,
+		rawToken:   credParts[0],
+		hmacSecret: credParts[1],
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## 适用对象
 
-这篇面向需要与 AiTrack 服务端集成的开发者、管理员和运维人员。所有端点的字段定义与 `CONTRACT.md` v1.1 严格一致。
+这篇面向需要与 AiTrack 服务端集成的开发者、管理员和运维人员。所有端点的字段定义与 `CONTRACT.md` v1.2 严格一致。
 
 ---
 
@@ -15,7 +15,7 @@
 | 角色 | 时机 | 调用的端点 |
 |------|------|-----------|
 | **管理员** | 服务端启动后 | `POST /admin/tokens` — 签发 token |
-| **管理员** | 将 token 交给开发者 | 复制 `token` 和 `hmac_secret` 字段值 |
+| **管理员** | 将 credential 交给开发者 | 复制 `credential` 字段值 |
 | **客户端（aitrack）** | 开发者每次编辑后自动触发 | `POST /api/v1/ai-track/edits` — 上报编辑记录 |
 | **客户端（aitrack）** | 每次 capture 结束、距上次 >1h 自动触发 | `POST /api/v1/ai-track/heartbeat` — 上报钩子状态 |
 | **管理员** | 查看团队 AI 用量 | `GET /api/v1/ai-track/stats` — 按维度统计 |
@@ -37,9 +37,9 @@ curl http://localhost:8080/actuator/health
 # 期望响应: {"status":"UP"}
 ```
 
-### 步骤二：签发开发者 token
+### 步骤二：签发开发者 credential
 
-每位开发者（或每个 CI pipeline）需要一个独立 token。
+每位开发者（或每个 CI pipeline）需要一个独立 credential。
 
 ```bash
 curl -s -X POST http://localhost:8080/admin/tokens \
@@ -52,23 +52,21 @@ curl -s -X POST http://localhost:8080/admin/tokens \
 
 ```json
 {
-  "token": "aitrack_abcdef1234567890abcdef1234567890",
-  "hmac_secret": "c2VjcmV0LWJhc2U2NA==",
+  "credential": "aitrack_abcdef1234567890abcdef1234567890-c2VjcmV0LWJhc2U2NA==",
   "token_key": "abcdef…7890"
 }
 ```
 
-**注意**：`token` 和 `hmac_secret` 明文**仅此一次**出现在响应中，服务端不保存明文。请立即将这两个值安全地交给对应开发者，由其在安装 aitrack 客户端时填入。
+**注意**：`credential` 明文**仅此一次**出现在响应中，服务端不保存明文。请立即将该值安全地交给对应开发者，由其在安装 aitrack 客户端时填入。
 
 ### 步骤三：开发者安装客户端钩子
 
-管理员将 `token` 和 `hmac_secret` 交给开发者后，开发者在自己的机器上执行：
+管理员将 `credential` 交给开发者后，开发者在自己的机器上执行：
 
 ```bash
 aitrack init --claude \
   --api-url http://localhost:8080 \
-  --api-token aitrack_abcdef1234567890abcdef1234567890 \
-  --hmac-secret c2VjcmV0LWJhc2U2NA==
+  --credential aitrack_abcdef1234567890abcdef1234567890-c2VjcmV0LWJhc2U2NA==
 
 aitrack status   # 验证钩子已安装
 ```
@@ -139,7 +137,7 @@ X-AiTrack-Signature = lowercase_hex(
 
 ## POST /admin/tokens
 
-签发新 token。token 明文仅在此响应中出现一次，服务端只保存 `sha256(token)`。
+签发新 credential。credential 明文仅在此响应中出现一次，服务端只保存 `sha256(token)`（token 是 credential 按第一个 `-` 拆分后的前半部分）。
 
 **鉴权**：`X-Admin-Key: {admin_key}`
 
@@ -161,17 +159,17 @@ X-AiTrack-Signature = lowercase_hex(
 
 ```json
 {
-  "token": "aitrack_abcdef1234567890abcdef1234567890",
-  "hmac_secret": "base64string==",
+  "credential": "aitrack_abcdef1234567890abcdef1234567890-c2VjcmV0LWJhc2U2NA==",
   "token_key": "abcdef…7890"
 }
 ```
 
 | 字段 | 说明 |
 |------|------|
-| `token` | 完整 bearer token，**仅此一次明文返回**，请立即存入客户端 config.toml |
-| `hmac_secret` | 用于 record_sig 和请求签名计算，**仅此一次明文返回** |
+| `credential` | 合并凭据字符串 `<token>-<hmac_secret>`，**仅此一次明文返回**，请立即存入客户端 config.toml 的 `credential` 键 |
 | `token_key` | masked 标识符，格式：去掉 `aitrack_` 前缀后的 `first_6 + "…" + last_4` |
+
+客户端按**第一个 `-`** 拆分 credential：`-` 之前为 token（用于 `Authorization: Bearer`），`-` 之后为 hmac_secret（用于 record_sig 和请求签名，不在网络上传输）。
 
 ### curl 示例
 
@@ -188,15 +186,14 @@ curl -s -X POST http://localhost:8080/admin/tokens \
 
 ```json
 {
-  "token": "aitrack_abcdef1234567890abcdef1234567890",
-  "hmac_secret": "c2VjcmV0LWJhc2U2NA==",
+  "credential": "aitrack_abcdef1234567890abcdef1234567890-c2VjcmV0LWJhc2U2NA==",
   "token_key": "abcdef…7890"
 }
 ```
 
-将 `token` 和 `hmac_secret` 的值交给对应开发者，用于 `aitrack init` 命令。
+将 `credential` 的值交给对应开发者，用于 `aitrack init --credential` 命令。
 
-**签发多个 token（团队场景）：**
+**签发多个 credential（团队场景）：**
 
 ```bash
 # 为 bob 签发
@@ -310,7 +307,7 @@ HMAC_SHA256(
 # 演示 record_sig 计算，与 CONTRACT.md v1.1 严格一致
 # 用法: bash compute_record_sig.sh
 
-HMAC_SECRET="c2VjcmV0LWJhc2U2NA=="   # base64；实际值来自 POST /admin/tokens 响应
+HMAC_SECRET="c2VjcmV0LWJhc2U2NA=="   # 实际值：将 POST /admin/tokens 返回的 credential 按第一个 "-" 拆分，取后半部分
 TOKEN_KEY="abcdef…7890"
 DEVICE_ID="550e8400-e29b-41d4-a716-446655440000"
 HOSTNAME_VAL="MacBook-Pro.local"
@@ -353,11 +350,14 @@ TS=$(date +%s)
 BODY='{"device_id":"550e8400-e29b-41d4-a716-446655440000","client_version":"1.0.0","edits":[{"tool":"claude","tool_version":"claude-code","provider":"anthropic","model":null,"session_id":"sess-abc123","repo_url":"git@github.com:org/repo.git","branch":"main","current_sha":"a1b2c3d4e5f6","file_path":"src/main.rs","added_lines":12,"removed_lines":3,"diff_hunk":"@@ -10,7 +10,16 @@\n ...","metadata":null,"timestamp":"2026-05-17T10:21:00Z","device_id":"550e8400-e29b-41d4-a716-446655440000","hostname":"MacBook-Pro.local","record_sig":"<用上方脚本预先计算>"}]}'
 
 BODY_SHA256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hex | awk '{print $2}')
-HMAC_SECRET="c2VjcmV0LWJhc2U2NA=="
+# credential = POST /admin/tokens 返回的 credential 字段值
+CREDENTIAL="aitrack_abcdef1234567890abcdef1234567890-c2VjcmV0LWJhc2U2NA=="
+TOKEN="${CREDENTIAL%%-*}"
+HMAC_SECRET="${CREDENTIAL#*-}"
 REQ_SIG=$(printf "${TS}\n${BODY_SHA256}" | openssl dgst -sha256 -hmac "$HMAC_SECRET" -hex | awk '{print $2}')
 
 curl -s -X POST http://localhost:8080/api/v1/ai-track/edits \
-  -H "Authorization: Bearer aitrack_abcdef1234567890abcdef1234567890" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
   -H "X-AiTrack-Device: 550e8400-e29b-41d4-a716-446655440000" \
   -H "X-AiTrack-Client: aitrack/1.0.0" \

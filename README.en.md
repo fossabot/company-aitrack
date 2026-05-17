@@ -107,14 +107,14 @@ docker-compose up -d --build
 curl http://localhost:8080/actuator/health
 ```
 
-### 2. Issue a Token
+### 2. Issue a Credential
 
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"macbook"}'
-# Returns token and hmac_secret — shown only once, store securely
+# Returns credential and token_key — credential shown only once, store securely
 ```
 
 ### 3. Developer-side Hook Installation
@@ -127,8 +127,7 @@ cd client && cargo build --release
 # Install Claude Code hook
 aitrack init --claude \
   --api-url https://aitrack.example.com \
-  --api-token <token> \
-  --hmac-secret <hmac_secret>
+  --credential <credential>
 
 # Check status
 aitrack status

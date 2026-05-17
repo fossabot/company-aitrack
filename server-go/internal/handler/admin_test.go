@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aitrack/server/internal/model"
@@ -19,14 +20,22 @@ func TestAdmin_CreateToken_OK(t *testing.T) {
 
 	var resp model.CreateTokenResponse
 	decodeJSON(t, w, &resp)
-	if resp.Token == "" {
-		t.Error("token should not be empty")
-	}
-	if resp.HmacSecret == "" {
-		t.Error("hmac_secret should not be empty")
+	if resp.Credential == "" {
+		t.Error("credential should not be empty")
 	}
 	if resp.TokenKey == "" {
 		t.Error("token_key should not be empty")
+	}
+	// credential must be "<token>-<hmac_secret>"; token starts with "aitrack_"
+	parts := strings.SplitN(resp.Credential, "-", 2)
+	if len(parts) != 2 {
+		t.Fatalf("credential %q does not contain '-'", resp.Credential)
+	}
+	if !strings.HasPrefix(parts[0], "aitrack_") {
+		t.Errorf("credential token part %q should start with aitrack_", parts[0])
+	}
+	if parts[1] == "" {
+		t.Error("credential hmac_secret part should not be empty")
 	}
 }
 

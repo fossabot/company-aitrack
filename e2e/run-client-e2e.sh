@@ -136,11 +136,14 @@ run_against_server() {
     # ── Provision a token ──────────────────────────────────────────────────────
     log "Provisioning token..."
     TOK_JSON=$(provision_token "${server_url}" "client-e2e-user")
-    TOKEN=$(echo "${TOK_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token'])")
-    HMAC_SECRET=$(echo "${TOK_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['hmac_secret'])")
+    # v1.2: response is {"credential":"<token>-<hmac_secret>","token_key":"<masked>"}
+    CREDENTIAL=$(echo "${TOK_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['credential'])")
     TOKEN_KEY=$(echo "${TOK_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['token_key'])")
+    # Split credential on the first "-": token=everything before, secret=everything after
+    TOKEN="${CREDENTIAL%%-*}"
+    HMAC_SECRET="${CREDENTIAL#*-}"
 
-    if [ -z "${TOKEN}" ] || [ "${TOKEN}" = "None" ]; then
+    if [ -z "${CREDENTIAL}" ] || [ "${CREDENTIAL}" = "None" ]; then
         fail "Token provisioning failed — response: ${TOK_JSON}"
         return
     fi
@@ -150,12 +153,11 @@ run_against_server() {
     AITRACK_HOME=$(mktemp -d "/tmp/aitrack-client-e2e-${impl}-XXXXXX")
     DEVICE_ID="e2e-device-$(uuidgen | tr '[:upper:]' '[:lower:]')"
 
-    # Write config.toml
+    # Write config.toml — v1.2: single "credential" key replaces token + hmac_secret
     cat > "${AITRACK_HOME}/config.toml" <<TOML
 api_url = "${server_url}"
-token = "${TOKEN}"
+credential = "${CREDENTIAL}"
 device_id = "${DEVICE_ID}"
-hmac_secret = "${HMAC_SECRET}"
 TOML
     chmod 0600 "${AITRACK_HOME}/config.toml"
     ok "Isolated AITRACK_HOME created at ${AITRACK_HOME}"

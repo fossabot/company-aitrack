@@ -4,7 +4,7 @@ use reqwest::Client;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::config::{load_config, mask_token};
+use crate::config::{load_config, mask_token, split_credential};
 use crate::crypto::compute_request_sig;
 use crate::db::{ensure_kv_table, get_last_heartbeat, pending_count_all, set_last_heartbeat};
 use crate::init::{has_claude_hook, has_codex_hook, has_cursor_hook};
@@ -29,7 +29,11 @@ struct HookStatus {
     cursor: bool,
 }
 
-pub async fn send_heartbeat(conn: &Connection, api_url: &str, token: &str, force: bool) -> Result<()> {
+/// Send a heartbeat to the server.
+///
+/// `credential` is the combined `"<token>-<hmac_secret>"` string. The token is used
+/// in the `Authorization` header; the hmac_secret signs the request body.
+pub async fn send_heartbeat(conn: &Connection, api_url: &str, credential: &str, force: bool) -> Result<()> {
     if api_url.starts_with("http://") {
         eprintln!("[aitrack] WARNING: api_url uses plaintext HTTP; token will be sent unencrypted");
     }
@@ -46,6 +50,14 @@ pub async fn send_heartbeat(conn: &Connection, api_url: &str, token: &str, force
         }
     }
 
+    let (token, hmac_secret) = match split_credential(credential) {
+        Ok(parts) => parts,
+        Err(e) => {
+            eprintln!("[aitrack] invalid credential: {e}");
+            return Ok(());
+        }
+    };
+
     let cfg = load_config();
     let home = dirs::home_dir().expect("cannot find home directory");
 
@@ -54,9 +66,8 @@ pub async fn send_heartbeat(conn: &Connection, api_url: &str, token: &str, force
     let cursor_installed = has_cursor_hook(&home.join(".cursor").join("hooks.json"));
 
     let pending = pending_count_all(conn);
-    let token_key_masked = mask_token(token);
+    let token_key_masked = mask_token(&token);
     let device_id = cfg.device_id.clone();
-    let hmac_secret = cfg.hmac_secret.clone();
 
     let hostname = gethostname::gethostname()
         .into_string()
@@ -196,7 +207,7 @@ mod tests {
 
         let conn = open_test_db();
         let before = chrono::Utc::now().timestamp();
-        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345", true).await.unwrap();
+        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345-testhmacsecret", true).await.unwrap();
 
         let recorded = get_last_heartbeat(&conn).expect("last_heartbeat should be set after success");
         assert!(recorded >= before, "last_heartbeat should be >= time before send");
@@ -212,7 +223,7 @@ mod tests {
             .await;
 
         let conn = open_test_db();
-        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345", true).await.unwrap();
+        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345-testhmacsecret", true).await.unwrap();
 
         // HTTP 500 → last_heartbeat should not be updated
         assert!(get_last_heartbeat(&conn).is_none(), "failed heartbeat should not update timestamp");
@@ -229,7 +240,7 @@ mod tests {
 
         // force=false → throttle should skip (elapsed < 3600)
         // Using a valid but unused URL to verify no HTTP call is made
-        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345", false).await.unwrap();
+        send_heartbeat(&conn, &mock_server.uri(), "aitrack_testtoken12345-testhmacsecret", false).await.unwrap();
         // If throttled, last_heartbeat stays the same value
         let after = get_last_heartbeat(&conn).unwrap();
         assert_eq!(after, now, "throttled: last_heartbeat should not change");
@@ -239,7 +250,7 @@ mod tests {
     async fn send_heartbeat_connection_error_is_graceful() {
         let conn = open_test_db();
         // Use invalid endpoint → connection error → should not panic, just log
-        send_heartbeat(&conn, "http://127.0.0.1:1", "aitrack_testtoken12345", true).await.unwrap();
+        send_heartbeat(&conn, "http://127.0.0.1:1", "aitrack_testtoken12345-testhmacsecret", true).await.unwrap();
         // last_heartbeat should not be set
         assert!(get_last_heartbeat(&conn).is_none());
     }

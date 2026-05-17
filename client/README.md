@@ -5,9 +5,9 @@ Hardened AI coding edit telemetry CLI — captures editor hook events, signs the
 ## Commands
 
 ```
-aitrack init    [--claude] [--codex] [--cursor] [--api-url URL] [--api-token TOK] [--hmac-secret S]
+aitrack init    [--claude] [--codex] [--cursor] [--api-url URL] [--credential CRED]
 aitrack remove  [--claude] [--codex] [--cursor]
-aitrack capture --tool <claude|codex|cursor>   (default: claude)  [--api-url URL] [--api-token TOK]
+aitrack capture --tool <claude|codex|cursor>   (default: claude)  [--api-url URL] [--credential CRED]
 aitrack inspect [--limit N]  (default 20, max 200)  [--pending] [--current-token]
 aitrack stats
 aitrack status
@@ -20,12 +20,12 @@ aitrack heartbeat
 ```bash
 cargo build --release
 # Binary: target/release/aitrack
-aitrack init --claude --api-url https://your-server --api-token YOUR_TOKEN --hmac-secret YOUR_SECRET
+aitrack init --claude --api-url https://your-server --credential YOUR_CREDENTIAL
 ```
 
 ## Local Storage
 
-- `~/.aitrack/config.toml` (0600) — api_url, token, device_id, hmac_secret
+- `~/.aitrack/config.toml` (0600) — api_url, credential, device_id
 - `~/.aitrack/records.db` (0600) — SQLite, all captured edits
 
 ## Hardening Points

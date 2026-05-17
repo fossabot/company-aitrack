@@ -29,7 +29,7 @@ pub(crate) mod test_support {
 use anyhow::Result;
 
 use cli::{Cli, Command};
-use config::{apply_init_args, load_config, mask_token, resolve_api_config};
+use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
 use db::{clean_all, clean_synced, inspect_records, open_db, pending_count, token_breakdown};
 use init::{detect_tool_statuses, install_hooks, remove_hooks};
 
@@ -48,7 +48,7 @@ pub async fn run(cli: Cli) -> Result<()> {
 }
 
 async fn handle_init(args: cli::InitArgs) -> Result<()> {
-    let cfg = apply_init_args(args.api_url, args.api_token, args.hmac_secret)?;
+    let cfg = apply_init_args(args.api_url, args.credential)?;
 
     let tools: Vec<&str> = {
         let mut t = Vec::new();
@@ -85,8 +85,10 @@ async fn handle_init(args: cli::InitArgs) -> Result<()> {
     if !cfg.api_url.is_empty() {
         println!("API URL: {}", cfg.api_url);
     }
-    if !cfg.token.is_empty() {
-        println!("Token: {}", mask_token(&cfg.token));
+    if !cfg.credential.is_empty() {
+        if let Ok((token, _)) = split_credential(&cfg.credential) {
+            println!("Token: {}", mask_token(&token));
+        }
     }
     println!("Device ID: {}", cfg.device_id);
 
@@ -164,8 +166,19 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     record.current_sha = repo.current_sha;
 
     // Set token_key, device_id, and hostname
-    let (api_url, token) = resolve_api_config(args.api_url, args.api_token);
+    let (api_url, credential) = resolve_api_config(args.api_url, args.credential);
     let cfg = load_config();
+    let (token, hmac_secret) = if credential.is_empty() {
+        (String::new(), String::new())
+    } else {
+        match split_credential(&credential) {
+            Ok(parts) => parts,
+            Err(e) => {
+                eprintln!("[aitrack] invalid credential: {e}");
+                return Ok(());
+            }
+        }
+    };
     record.token_key = mask_token(&token);
     record.device_id = cfg.device_id.clone();
     record.hostname = gethostname::gethostname()
@@ -174,7 +187,7 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
 
     // Compute record signature
     record.record_sig = crypto::compute_record_sig(
-        &cfg.hmac_secret,
+        &hmac_secret,
         &record.token_key,
         &record.device_id,
         &record.hostname,
@@ -191,11 +204,11 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     let conn = open_db()?;
     let inserted = db::insert_record(&conn, &record)?;
 
-    if inserted && !api_url.is_empty() && !token.is_empty() {
-        uploader::flush_unsynced(&conn, &api_url, &token).await?;
+    if inserted && !api_url.is_empty() && !credential.is_empty() {
+        uploader::flush_unsynced(&conn, &api_url, &credential).await?;
 
         // Throttled heartbeat
-        heartbeat::send_heartbeat(&conn, &api_url, &token, false).await?;
+        heartbeat::send_heartbeat(&conn, &api_url, &credential, false).await?;
     }
 
     Ok(())
@@ -207,7 +220,11 @@ fn handle_inspect(args: cli::InspectArgs) -> Result<()> {
     let cfg = load_config();
 
     let token_key = if args.current_token {
-        mask_token(&cfg.token)
+        if let Ok((token, _)) = split_credential(&cfg.credential) {
+            mask_token(&token)
+        } else {
+            String::new()
+        }
     } else {
         String::new()
     };
@@ -260,13 +277,20 @@ fn handle_stats() -> Result<()> {
 fn handle_status() -> Result<()> {
     let cfg = load_config();
     let conn = open_db()?;
-    let token_key = mask_token(&cfg.token);
+    let token_key = if cfg.credential.is_empty() {
+        String::new()
+    } else {
+        match split_credential(&cfg.credential) {
+            Ok((token, _)) => mask_token(&token),
+            Err(_) => "(malformed credential)".to_string(),
+        }
+    };
     let pending = pending_count(&conn, &token_key);
     let home = dirs::home_dir().expect("cannot find home directory");
     let (claude, codex, cursor) = detect_tool_statuses(&home);
 
     println!("API URL:      {}", if cfg.api_url.is_empty() { "(not set)" } else { &cfg.api_url });
-    println!("Token:        {}", if cfg.token.is_empty() { "(not set)" } else { &token_key });
+    println!("Token:        {}", if cfg.credential.is_empty() { "(not set)" } else { &token_key });
     println!("Device ID:    {}", if cfg.device_id.is_empty() { "(not set)" } else { &cfg.device_id });
     println!("Pending sync: {pending}");
     println!(
@@ -302,15 +326,15 @@ fn handle_clean(args: cli::CleanArgs) -> Result<()> {
 }
 
 async fn handle_heartbeat() -> Result<()> {
-    let (api_url, token) = resolve_api_config(None, None);
+    let (api_url, credential) = resolve_api_config(None, None);
 
-    if api_url.is_empty() || token.is_empty() {
-        eprintln!("[aitrack] api_url or token not configured");
+    if api_url.is_empty() || credential.is_empty() {
+        eprintln!("[aitrack] api_url or credential not configured");
         return Ok(());
     }
 
     let conn = open_db()?;
-    heartbeat::send_heartbeat(&conn, &api_url, &token, true).await?;
+    heartbeat::send_heartbeat(&conn, &api_url, &credential, true).await?;
     println!("Heartbeat sent.");
     Ok(())
 }

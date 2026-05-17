@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class CreateTokenResponse {
-    private String token;
-    @JsonProperty("hmac_secret") private String hmacSecret;
+    /** Combined credential: "<token>-<hmac_secret>". Split on first '-' to recover the two parts. */
+    private String credential;
     @JsonProperty("token_key") private String tokenKey;
 }

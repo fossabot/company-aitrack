@@ -1,8 +1,27 @@
-# AiTrack Protocol Contract v1.1
+# AiTrack Protocol Contract v1.2
 
 This document is the single source of truth shared by the `aitrack` Rust client and the `aitrack-server` Java and Go services. All implementations MUST follow this contract exactly.
 
-**v1.1 change:** added the `hostname` field — the reporting computer's OS hostname. One API token used across multiple developer machines is normal and allowed; `hostname` makes per-machine activity visible so cheating can be reviewed manually. It is NOT an access-control mechanism — no per-token isolation is added.
+**v1.2 change:** the API token and HMAC secret are issued and stored as a single combined **credential** string (`<token>-<hmac_secret>`), so it is not obvious that two separate keys exist. See the *Credential* section below.
+
+**v1.1 change:** added the `hostname` field — the reporting computer's OS hostname. One credential used across multiple developer machines is normal and allowed; `hostname` makes per-machine activity visible so cheating can be reviewed manually. It is NOT an access-control mechanism — no per-token isolation is added.
+
+---
+
+## Credential
+
+`POST /admin/tokens` issues a single opaque **credential** instead of two separate values:
+
+```
+credential = "<token>" + "-" + "<hmac_secret>"
+```
+
+- `token` is `aitrack_<hex>` — it contains no `-` character.
+- `hmac_secret` is the HMAC signing key.
+- The credential is split on the **first** `-`: everything before it is the `token`, everything after it is the `hmac_secret`.
+- `POST /admin/tokens` response: `{ "credential": "<token>-<hmac_secret>", "token_key": "<masked>" }` — `token` and `hmac_secret` are NOT returned as separate fields.
+
+The client stores only `credential` (never the two parts separately). Internally it splits the credential on use: `token` goes in the `Authorization: Bearer` header; `hmac_secret` is the HMAC key for `record_sig` and `X-AiTrack-Signature`. `hmac_secret` is never sent over the wire.
 
 ---
 
@@ -16,9 +35,9 @@ This document is the single source of truth shared by the `aitrack` Rust client 
 ## Client Commands
 
 ```
-aitrack init    [--claude] [--codex] [--cursor] [--api-url URL] [--api-token TOK] [--hmac-secret S]
+aitrack init    [--claude] [--codex] [--cursor] [--api-url URL] [--credential CRED]
 aitrack remove  [--claude] [--codex] [--cursor]
-aitrack capture --tool <claude|codex|cursor>   (default: claude)  [--api-url URL] [--api-token TOK]
+aitrack capture --tool <claude|codex|cursor>   (default: claude)  [--api-url URL] [--credential CRED]
 aitrack inspect [--limit N]  (default 20, max 200)  [--pending] [--current-token]
 aitrack stats
 aitrack status
@@ -26,13 +45,16 @@ aitrack clean   [--all] [--force]
 aitrack heartbeat
 ```
 
+`--credential` takes the single combined credential string issued by `POST /admin/tokens`.
+
 ---
 
 ## Local Storage
 
 - Directory: `~/.aitrack/`
 - `~/.aitrack/config.toml` — permissions **0600**
-  - Keys: `api_url`, `token`, `device_id`, `hmac_secret`
+  - Keys: `api_url`, `credential`, `device_id`
+  - `credential` is the combined `<token>-<hmac_secret>` string; the two parts are never stored separately.
 - `~/.aitrack/records.db` — SQLite, created with `chmod 0600`
 - `device_id`: UUIDv4 generated on first run, persisted to `config.toml`
 

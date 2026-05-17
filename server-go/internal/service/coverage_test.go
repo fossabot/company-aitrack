@@ -2,6 +2,7 @@
 package service_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aitrack/server/internal/config"
@@ -24,7 +25,8 @@ func TestBoolToInt_ViaActiveToken(t *testing.T) {
 	resp, _ := svc.CreateToken(&model.CreateTokenRequest{Owner: "test"})
 	// Force active=false
 	database.Exec("UPDATE tokens SET active=0")
-	found, err := svc.FindActiveToken(resp.Token)
+	rawToken := strings.SplitN(resp.Credential, "-", 2)[0]
+	found, err := svc.FindActiveToken(rawToken)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,10 +37,9 @@ pub struct InitArgs {
     pub cursor: bool,
     #[arg(long)]
     pub api_url: Option<String>,
+    /// Combined credential string: "<token>-<hmac_secret>"
     #[arg(long)]
-    pub api_token: Option<String>,
-    #[arg(long)]
-    pub hmac_secret: Option<String>,
+    pub credential: Option<String>,
 }
 
 #[derive(Args)]
@@ -59,8 +58,9 @@ pub struct CaptureArgs {
     pub tool: String,
     #[arg(long)]
     pub api_url: Option<String>,
+    /// Combined credential string: "<token>-<hmac_secret>"
     #[arg(long)]
-    pub api_token: Option<String>,
+    pub credential: Option<String>,
 }
 
 #[derive(Args)]

@@ -48,12 +48,12 @@ Add the PostgreSQL driver to `pom.xml`:
 |--------|------|-------------|
 | POST | `/admin/tokens` | Issue a new token |
 
-**Issue token** — returns plaintext token (shown once only):
+**Issue credential** — returns combined credential (shown once only):
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"CI pipeline"}'
-# → {"token":"aitrack_...","hmac_secret":"...","token_key":"abc123…ef01"}
+# → {"credential":"aitrack_...-...","token_key":"abc123…ef01"}
 ```
 
 > In production, secure `/admin/**` with network ACL or an admin secret header.

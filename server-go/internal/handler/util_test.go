@@ -70,14 +70,17 @@ func TestAdmin_CreateToken_FullResponse(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
-	if _, ok := resp["token"]; !ok {
-		t.Error("response should have 'token' field")
-	}
-	if _, ok := resp["hmac_secret"]; !ok {
-		t.Error("response should have 'hmac_secret' field")
+	if _, ok := resp["credential"]; !ok {
+		t.Error("response should have 'credential' field")
 	}
 	if _, ok := resp["token_key"]; !ok {
 		t.Error("response should have 'token_key' field")
+	}
+	if _, ok := resp["token"]; ok {
+		t.Error("response must NOT have separate 'token' field")
+	}
+	if _, ok := resp["hmac_secret"]; ok {
+		t.Error("response must NOT have separate 'hmac_secret' field")
 	}
 }
 

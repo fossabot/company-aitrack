@@ -64,8 +64,7 @@ cargo llvm-cov --summary-only
 # 手动测试 capture（需要先 init 并指向本地服务端）
 ./target/debug/aitrack init --claude \
   --api-url http://localhost:8080 \
-  --api-token aitrack_<token> \
-  --hmac-secret <secret>
+  --credential <credential>
 ./target/debug/aitrack status
 ./target/debug/aitrack inspect --limit 5
 ```
@@ -161,8 +160,7 @@ docker run -p 8080:8080 aitrack-server-java
 ./client/target/release/aitrack init \
   --claude \
   --api-url http://localhost:8080 \
-  --api-token <token> \
-  --hmac-secret <secret>
+  --credential <credential>
 
 # 4. 模拟 Claude hook 触发（stdin 传入 PostToolUse payload）
 echo '<claude-posttooluse-json>' | \
@@ -181,6 +179,6 @@ E2E 运行中注意 `X-AiTrack-Timestamp` 的 300 秒时间窗口——测试环
 ## 安全相关注意事项
 
 - `config.toml` 和 `records.db` 权限必须是 0600，调试时不要放宽。
-- 测试数据中不要使用真实 token 或 hmac_secret。
+- 测试数据中不要使用真实 credential。
 - 公开 Issue / PR 中不要粘贴含有真实凭据的日志或请求体。
-- `hmac_secret` 在服务端以 AES-256-GCM 加密存储（`HmacSecretEncryptor`），调试时可查看 `application.yml` 中的加密密钥配置。
+- `hmac_secret`（credential 的后半部分）在服务端以 AES-256-GCM 加密存储（`HmacSecretEncryptor`），调试时可查看 `application.yml` 中的加密密钥配置。

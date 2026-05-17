@@ -96,11 +96,18 @@ func provisionToken(serverURL, adminKey, owner string) (factory.TokenBundle, err
 	if code != 200 {
 		return factory.TokenBundle{}, fmt.Errorf("provision token: status %d body=%s", code, resp)
 	}
-	var tok factory.TokenBundle
-	if err := json.Unmarshal(resp, &tok); err != nil {
+	// v1.2: response is {"credential":"<token>-<hmac_secret>","token_key":"<masked>"}
+	var raw struct {
+		Credential string `json:"credential"`
+		TokenKey   string `json:"token_key"`
+	}
+	if err := json.Unmarshal(resp, &raw); err != nil {
 		return factory.TokenBundle{}, fmt.Errorf("decode token: %w body=%s", err, resp)
 	}
-	return tok, nil
+	if raw.Credential == "" {
+		return factory.TokenBundle{}, fmt.Errorf("provision token: empty credential in response body=%s", resp)
+	}
+	return factory.SplitCredential(raw.Credential, raw.TokenKey), nil
 }
 
 // ─── Scenarios ────────────────────────────────────────────────────────────────
@@ -126,8 +133,7 @@ func scenarioAdminTokenAuth(serverURL, adminKey string) {
 		map[string]string{"X-Admin-Key": adminKey}, body3)
 	assertStatus("POST /admin/tokens valid → 200", code3, 200)
 	m := parseJSON(resp3)
-	assert("response has token field", m["token"] != nil, fmt.Sprintf("resp=%s", resp3))
-	assert("response has hmac_secret field", m["hmac_secret"] != nil, fmt.Sprintf("resp=%s", resp3))
+	assert("response has credential field", m["credential"] != nil, fmt.Sprintf("resp=%s", resp3))
 	assert("response has token_key field", m["token_key"] != nil, fmt.Sprintf("resp=%s", resp3))
 }
 

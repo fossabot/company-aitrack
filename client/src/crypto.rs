@@ -47,7 +47,8 @@ pub fn compute_request_sig(hmac_secret: &str, unix_ts: u64, body_bytes: &[u8]) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
+    use crate::config::split_credential;
+use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
 
     // Known-value: sha256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb924\
@@ -165,6 +166,7 @@ mod tests {
         let cfg = ApiConfigFactory::new(42)
             .with_hmac_secret("factory-secret")
             .build();
+        let (_, hmac_secret) = split_credential(&cfg.credential).unwrap();
         let rec = EditRecordFactory::new(42)
             .with_token_key("factory-tok")
             .with_device_id("factory-dev")
@@ -180,7 +182,7 @@ mod tests {
             .build();
 
         let sig = compute_record_sig(
-            &cfg.hmac_secret,
+            &hmac_secret,
             &rec.token_key,
             &rec.device_id,
             &rec.hostname,
@@ -196,7 +198,7 @@ mod tests {
         assert_eq!(sig.len(), 64);
         // Idempotent
         let sig2 = compute_record_sig(
-            &cfg.hmac_secret,
+            &hmac_secret,
             &rec.token_key,
             &rec.device_id,
             &rec.hostname,
