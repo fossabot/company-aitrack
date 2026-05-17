@@ -51,7 +51,7 @@ For each of the two server implementations (Java, Go) it:
 
 1. Compiles the real `aitrack` binary via `cargo build --release`.
 2. Starts the server in a Docker container.
-3. Issues `POST /admin/tokens` to obtain a fresh `token`, `hmac_secret`, and `token_key`.
+3. Issues `POST /admin/tokens` to obtain a fresh `credential` (and `token_key`); the credential is split on the first `-` into the token and HMAC secret.
 4. Creates an isolated `AITRACK_HOME` temp directory with `config.toml` pointing
    at the test server — the real `~/.aitrack/` is never read or written.
 5. Creates a real git repo (with a commit) so the binary can resolve `repo_url`,
