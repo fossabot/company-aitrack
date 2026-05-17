@@ -43,7 +43,7 @@ docker build -f docker/Dockerfile.server-java -t aitrack-server-java:latest .
 docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest .
 ```
 
-- 构建阶段：`golang:1.22`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
+- 构建阶段：`golang:1.24`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
 - 运行时镜像：`gcr.io/distroless/base-debian12`（无 shell），监听端口 8080
 
 ---
@@ -88,6 +88,8 @@ docker compose -f docker/docker-compose.yml --profile go up -d
 | `AITRACK_MAX_ADDED_LINES` / `aitrack.max-added-lines` | `5000` | 单条记录 added_lines 上限，超出则 flagged: oversized |
 | `AITRACK_REPO_WHITELIST_ENFORCE` / `aitrack.repo-whitelist.enforce` | `false` | 是否强制拒绝白名单外的 repo_url |
 | `AITRACK_REPO_WHITELIST_URLS` / `aitrack.repo-whitelist.urls` | 空 | 允许的 repo URL 列表（逗号分隔 / YAML 列表） |
+| `AITRACK_MAX_BATCH_SIZE` / `aitrack.max-batch-size` | `500` | 单次上报 `edits` 数组上限，超出则 400 |
+| `AITRACK_MAX_REQUEST_BODY_BYTES` / `spring.servlet.multipart.max-request-size` (Java) / `aitrack.max-request-body-bytes` (Go) | `8388608`（8 MiB） | 请求体字节上限，超出则 413 |
 
 ### 通过 .env 文件配置
 
@@ -153,14 +155,14 @@ spring:
 
 **Admin 接口安全**：生产环境中 `/admin/**` 应通过网络 ACL 或反向代理限制访问，不对公网暴露。
 
-**Token 签发流程**：
+**Credential 签发流程**：
 
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H 'X-Admin-Key: YOUR_ADMIN_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"dev machine"}'
-# 响应中的 token 和 hmac_secret 仅出现一次，立即保存
+# 响应中的 credential 仅出现一次，立即保存并交给开发者
 ```
 
 **检查设备心跳状态**：
@@ -172,7 +174,9 @@ curl http://localhost:8080/api/v1/ai-track/devices \
 
 `hooks.claude/codex/cursor` 为 `false` 的设备需人工核查是否绕过了监控。
 
-**H2 控制台**（Java 实现，仅开发环境）：
+**H2 控制台**（Java 实现，仅开发环境，生产环境强制禁用）：
+
+H2 Web 控制台在生产 Profile 下通过 `spring.h2.console.enabled=false` 强制禁用。仅在本地开发时可用：
 
 ```
 http://localhost:8080/h2-console

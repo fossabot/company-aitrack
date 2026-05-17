@@ -42,17 +42,18 @@ AI 编码工具（Claude Code、Codex CLI、Cursor）大规模进入研发团队
 
 ## 架构
 
-aitrack 由三个独立组件构成，通过协议 v1.1 互通：
+aitrack 由三个独立组件构成，通过协议 v1.2 互通：
 
 | 组件 | 技术栈 | 职责 |
 |------|--------|------|
 | **Rust 客户端** `aitrack` | Rust · single binary · 无运行时依赖 | 安装钩子、捕获编辑事件、HMAC 签名、上报数据 |
-| **Java 服务端** `aitrack-server` | Java 17 · Spring Boot 3.2.x · H2 / PostgreSQL | 10 步校验链、可信归因、效能查询（主推实现） |
-| **Go 服务端** `aitrack-server-go` | Go 1.22 · chi v5 · SQLite | 与 Java 端功能对等的轻量备选实现 |
+| **Java 服务端** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10 步校验链、可信归因、效能查询（主推实现） |
+| **Go 服务端** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite | 与 Java 端功能对等的轻量备选实现 |
 
-**协议 v1.1 关键设计：**
+**协议 v1.2 关键设计：**
 
 - 所有上报请求均附带 `record_sig`（HMAC-SHA256 覆盖 11 个核心字段）和请求级 HMAC 签名
+- `POST /admin/tokens` 返回单一 `credential` 字段（`<token>-<hmac_secret>`），简化签发与客户端配置
 - `hostname` 字段（v1.1 新增）使同一 token 在多台机器上的活动可按设备维度人工审查
 - 客户端本地数据库 `~/.aitrack/records.db` 权限 0600，`hmac_secret` AES-256-GCM 加密存储
 

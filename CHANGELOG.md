@@ -4,6 +4,45 @@
 
 ---
 
+## v1.2.0 — 2026-05-18
+
+### 发布说明
+
+v1.2.0 是协议 v1.2 对应的正式版本。核心变更是将 `token` 与 `hmac_secret` 合并为单个 **credential** 字符串（`<token>-<hmac_secret>`），简化了签发与分发流程。同步完成了一批安全加固，覆盖服务端请求体限制、批量上限、HMAC 常量时间比对、H2 控制台禁用，以及运行时版本升级。
+
+### 新增
+
+- **协议 v1.2 合并凭据（credential）**：`POST /admin/tokens` 响应字段由 `token` + `hmac_secret` 合并为单一 `credential` 字段（格式：`<token>-<hmac_secret>`）；客户端 `config.toml` 存储键由 `token`/`hmac_secret` 改为 `credential`；CLI 参数 `--credential` 接收合并字符串。
+- 客户端 `init.rs`：`config.toml` 和 `records.db` 改为原子创建，先写临时文件再原子 rename，避免写入中断留下损坏文件。
+- 客户端 `capture`：stdin 读取增加上限（防止超大 payload 阻塞进程）。
+
+### 变更
+
+- `CONTRACT.md` 升版至 v1.2，新增 `v1.2 change` 说明段落及 `Credential` 章节，明确 credential 拆分规则（按第一个 `-` 拆分）。
+- Java 服务端升级至 Spring Boot **3.3.8**。
+- Go 服务端依赖升级：chi **v5.2.5**；Go 工具链要求 **1.24**。
+- 服务端请求体上限统一设为 **8 MiB**（Java `spring.servlet.multipart.max-request-size` / Go 中间件 `http.MaxBytesReader`）。
+- 服务端单次上报 `edits` 数组上限设为 **500 条**，超出返回 400。
+- 服务端 HMAC 比对全部改为**常量时间比较**（Java `MessageDigest.isEqual`，Go `subtle.ConstantTimeCompare`），消除 timing attack 面。
+- Java 服务端 H2 Web 控制台在生产 Profile 下**强制禁用**（`spring.h2.console.enabled=false`）。
+
+### 加固点
+
+本版本加固点覆盖 H1–H8（含本版新增的服务端加固项）：
+
+| 编号 | 说明 |
+|------|------|
+| H1 | record_sig HMAC — 防本地 DB 篡改 |
+| H2 | record_sig 绑定 device_id+token — 防跨设备伪造 |
+| H3 | 心跳 hook 状态上报 — 检测静默卸载 |
+| H4 | Myers/LCS 真差分 — 防行数膨胀 |
+| H5 | 速率限制 (token, file_path) 每小时 ≤ 30 — 防刷量 |
+| H6 | 适配器解析失败记录日志 — 不静默吞错 |
+| H7 | repo_url 白名单（enforce=true 时强制拒绝）— 防 repo 伪造 |
+| H8 | file_path 合理性校验（无 `..`）— 防路径注入 |
+
+---
+
 ## v1.1.0 — 2026-05-17
 
 ### 发布说明

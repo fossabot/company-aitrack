@@ -68,9 +68,18 @@ X-AiTrack-Signature = lowercase_hex(
 
 服务端校验：
 - 验证 `X-AiTrack-Timestamp` 与服务器当前时间差 ≤ 300 秒（可配置）
-- 重新计算 HMAC 并与 header 值常量时间比对
+- 重新计算 HMAC 并与 header 值**常量时间比对**（Java `MessageDigest.isEqual`，Go `subtle.ConstantTimeCompare`），消除 timing attack 面
 
 超出时间窗口的请求直接返回 401，不进入后续校验。
+
+---
+
+## 请求体与批量上限
+
+服务端在反序列化请求体前执行两道前置限制：
+
+- **请求体上限 8 MiB**：超出则直接返回 413，不进入校验链（Java `spring.servlet.multipart.max-request-size`；Go `http.MaxBytesReader`）。
+- **`edits` 数组上限 500 条**：超出则返回 400，防止单次请求拖垮服务端。
 
 ---
 
@@ -82,8 +91,8 @@ X-AiTrack-Signature = lowercase_hex(
 |------|----------|----------|--------|
 | 1 | Bearer token 存在且 active | 401 整批 | 基础鉴权 |
 | 2 | `X-AiTrack-Timestamp` 与服务器时差 ≤ 300 秒 | 401 整批 | 防重放（H2） |
-| 3 | `X-AiTrack-Signature` HMAC 验证 | 401 整批 | 请求完整性 |
-| 4 | 每条 `record_sig` HMAC 验证 | 单条 `rejected: sig_mismatch` | 防本地 DB 篡改（H1/H2） |
+| 3 | `X-AiTrack-Signature` HMAC 验证（常量时间比对） | 401 整批 | 请求完整性 |
+| 4 | 每条 `record_sig` HMAC 验证（常量时间比对） | 单条 `rejected: sig_mismatch` | 防本地 DB 篡改（H1/H2） |
 | 5 | `diff_hunk` 解析行数与 `added_lines`/`removed_lines` 偏差 ≤ 1 | 单条 `flagged: diff_inconsistent` | 防伪造 diff（H4） |
 | 6 | `repo_url` 在白名单内（enforce=true 时） | 单条 `flagged/rejected: repo_unknown` | 防 repo 伪造（H7） |
 | 7 | `file_path` 不含 `..`，与 `repo_url` 路径逻辑一致 | 单条 `flagged: path_mismatch` | 防路径注入（H8） |
@@ -105,12 +114,16 @@ X-AiTrack-Signature = lowercase_hex(
 
 ---
 
-## Token 存储与 hmac_secret 加密
+## Credential 存储与 hmac_secret 加密
+
+### Credential 签发与拆分（v1.2）
+
+- `POST /admin/tokens` 响应返回单一 `credential` 字段（`<token>-<hmac_secret>`），**仅返回一次**，服务端不保存明文
+- 客户端按**第一个 `-`** 拆分：前半部分为 `token`，后半部分为 `hmac_secret`；两部分均不单独落盘，`credential` 整体存入 `config.toml`
 
 ### Token 哈希存储
 
 - 服务端存储 `sha256(token)`，不存明文
-- Token 明文仅在签发时（`POST /admin/tokens` 响应）出现一次
 - `token_key` = 去掉 `aitrack_` 前缀后的 `first_6 + "…" + last_4`，用于日志和标识，不可逆回 token
 
 ### hmac_secret AES-GCM 加密
@@ -123,9 +136,11 @@ X-AiTrack-Signature = lowercase_hex(
 
 ## 客户端本地安全
 
-- `~/.aitrack/config.toml`：文件权限 0600，包含 token 明文和 hmac_secret
+- `~/.aitrack/config.toml`：文件权限 0600，包含 `credential`（合并凭据，含 token 和 hmac_secret）
 - `~/.aitrack/records.db`：文件权限 0600，SQLite 本地记录库
 - `device_id`：UUIDv4，首次运行生成，不可重置（除非删除 config.toml）
+- **原子创建**：`config.toml` 和 `records.db` 均先写临时文件再原子 rename，避免写入中断留下权限为 0644 的半成品文件
+- **stdin 上限**：`capture` 命令读取 stdin 时设有字节上限，防止超大 hook payload 占满内存
 
 ---
 

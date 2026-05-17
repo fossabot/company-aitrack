@@ -148,7 +148,7 @@ reqSig := factory.ComputeRequestSig(secret, unixTS, bodyBytes)
 │  → COPY .jar → eclipse-temurin:17-jre                  │
 └───────────────────────────────────────────────────────┘
 ┌───────────────────────────────────────────────────────┐
-│  Dockerfile.server-go (golang:1.22)                    │
+│  Dockerfile.server-go (golang:1.24)                    │
 │    go mod download                                      │
 │    go test ./... -coverprofile=cover.out               │
 │    go tool cover → check total ≥ 90%                   │

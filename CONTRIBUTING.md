@@ -19,7 +19,7 @@
 | Rust | stable（推荐最新 stable） |
 | JDK | 17 |
 | Maven | 3.8+ |
-| Go | 1.22+ |
+| Go | 1.24+ |
 | Docker | 用于端到端集成验证 |
 
 ### 构建与测试
@@ -105,7 +105,7 @@ Contributions to aitrack are welcome.
 | Rust | stable (latest stable recommended) |
 | JDK | 17 |
 | Maven | 3.8+ |
-| Go | 1.22+ |
+| Go | 1.24+ |
 | Docker | for end-to-end integration verification |
 
 ### Build and test

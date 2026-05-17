@@ -1,6 +1,6 @@
 # aitrack-server
 
-Hardened AI coding edit telemetry server. Spring Boot 3.x / Java 17 / H2 (or PostgreSQL).
+Hardened AI coding edit telemetry server. Spring Boot 3.3.8 / Java 17 / H2 (or PostgreSQL).
 
 ## Requirements
 
@@ -14,8 +14,10 @@ mvn spring-boot:run
 # Server starts on http://localhost:8080
 ```
 
-H2 console available at `http://localhost:8080/h2-console`
+H2 console available at `http://localhost:8080/h2-console` in local dev only.
 (JDBC URL: `jdbc:h2:file:./data/aitrack`, no password)
+
+**Note**: H2 console is disabled in production via `spring.h2.console.enabled=false`.
 
 ## Switch to PostgreSQL
 
@@ -144,6 +146,8 @@ Example: `"aitrack_abcdef1234567890abcdef1234567890"` → `"abcdef…7890"`.
 The server stores only `sha256(token)` — the plaintext token is shown once at issuance.
 `hmac_secret` is stored encrypted at rest with AES-256-GCM (`HmacSecretEncryptor`); it is decrypted in memory only when needed to recompute `record_sig`.
 
+All HMAC comparisons use **constant-time equality** (`MessageDigest.isEqual`) to prevent timing attacks.
+
 ## Testing
 
 ### Running Tests
@@ -267,3 +271,5 @@ Key `application.yml` settings:
 | `aitrack.max-added-lines` | `5000` | Oversized edit threshold |
 | `aitrack.repo-whitelist.enforce` | `false` | Whether to hard-reject unknown repos |
 | `aitrack.repo-whitelist.urls` | `[]` | Allowed repo URLs |
+| `aitrack.max-batch-size` | `500` | Max number of edits per upload request (returns 400 if exceeded) |
+| `spring.servlet.multipart.max-request-size` | `8MB` | Request body size limit (returns 413 if exceeded) |

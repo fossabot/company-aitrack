@@ -42,17 +42,18 @@ AI coding tools (Claude Code, Codex CLI, Cursor) have entered engineering teams 
 
 ## Architecture
 
-aitrack consists of three independent components communicating via Protocol v1.1:
+aitrack consists of three independent components communicating via Protocol v1.2:
 
 | Component | Stack | Responsibility |
 |-----------|-------|----------------|
 | **Rust client** `aitrack` | Rust · single binary · no runtime dependencies | Install hooks, capture edit events, HMAC signing, upload data |
-| **Java server** `aitrack-server` | Java 17 · Spring Boot 3.2.x · H2 / PostgreSQL | 10-step validation chain, trusted attribution, effectiveness queries (primary implementation) |
-| **Go server** `aitrack-server-go` | Go 1.22 · chi v5 · SQLite | Feature-equivalent lightweight alternative implementation |
+| **Java server** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10-step validation chain, trusted attribution, effectiveness queries (primary implementation) |
+| **Go server** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite | Feature-equivalent lightweight alternative implementation |
 
-**Protocol v1.1 key design:**
+**Protocol v1.2 key design:**
 
 - All upload requests include `record_sig` (HMAC-SHA256 covering 11 core fields) and a request-level HMAC signature
+- `POST /admin/tokens` returns a single `credential` field (`<token>-<hmac_secret>`), simplifying issuance and client configuration
 - `hostname` field (new in v1.1) makes activity from a single token across multiple machines reviewable per device
 - Local client database `~/.aitrack/records.db` permissions 0600, `hmac_secret` encrypted with AES-256-GCM at rest
 

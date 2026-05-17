@@ -27,7 +27,7 @@ company-aitrack/
 ├── server-java/         — Java 服务端（Spring Boot 3 / JDK 17）
 │   └── src/test/java/com/aitrack/server/
 │       └── testkit/     — Java 测试工厂（EditDtoFactory 等）
-└── server-go/           — Go 服务端（Go 1.22+）
+└── server-go/           — Go 服务端（Go 1.24+）
 ```
 
 ---

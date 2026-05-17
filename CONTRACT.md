@@ -300,4 +300,7 @@ On adapter parse failure: write a local log line (hardening point H6, do NOT sil
 | H2 | record_sig binding device_id+token | Prevents cross-device record forgery |
 | H3 | Heartbeat with hook status | Detects silent hook uninstall |
 | H4 | Myers/LCS diff (similar crate) | Prevents inflated line count gaming |
+| H5 | Server rate limit per (token, file_path)/hour | Prevents flooding / edit count inflation |
 | H6 | Parse failure logging | No silent swallowing of adapter errors |
+| H7 | repo_url whitelist (enforce=true) | Prevents repo spoofing |
+| H8 | file_path plausibility check (no `..`) | Prevents path injection |

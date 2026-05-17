@@ -281,7 +281,7 @@ curl -s -X POST http://localhost:8080/admin/tokens \
 
 ### record_sig 签名算法（可复现脚本）
 
-`record_sig` 覆盖 11 个核心字段，字段顺序与分隔符必须与 CONTRACT.md v1.1 完全一致：
+`record_sig` 覆盖 11 个核心字段，字段顺序与分隔符必须与 CONTRACT.md v1.2 完全一致：
 
 ```
 HMAC_SHA256(
@@ -304,7 +304,7 @@ HMAC_SHA256(
 
 ```bash
 #!/usr/bin/env bash
-# 演示 record_sig 计算，与 CONTRACT.md v1.1 严格一致
+# 演示 record_sig 计算，与 CONTRACT.md v1.2 严格一致
 # 用法: bash compute_record_sig.sh
 
 HMAC_SECRET="c2VjcmV0LWJhc2U2NA=="   # 实际值：将 POST /admin/tokens 返回的 credential 按第一个 "-" 拆分，取后半部分

@@ -13,12 +13,12 @@
 | Rust / Cargo | 稳定版（推荐 1.82+） | 客户端构建与测试 |
 | JDK | 17+ | Java 服务端（若本机无 JDK，用 Docker 构建） |
 | Maven | 3.8+ | Java 服务端构建 |
-| Go | 1.22+ | Go 服务端构建与测试 |
+| Go | 1.24+ | Go 服务端构建与测试 |
 | Docker | 20+ | 跨平台构建、Java 构建、e2e 测试 |
 | sqlite3 CLI | 任意 | e2e 测试验证本地 DB |
 | git | 任意 | 客户端 git 元数据提取 |
 
-**注意**：Java 服务端构建依赖 JDK 17，若本机未安装，所有 Java 相关操作均需在 Docker 内进行（见下方"通过 Docker 构建"）。
+**注意**：Java 服务端（Spring Boot 3.3.8）构建依赖 JDK 17，若本机未安装，所有 Java 相关操作均需在 Docker 内进行（见下方"通过 Docker 构建"）。
 
 ---
 

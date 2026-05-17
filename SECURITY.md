@@ -8,7 +8,8 @@
 
 | 版本 | 支持状态 |
 |------|---------|
-| `v1.1.x`（当前） | 支持安全修复 |
+| `v1.2.x`（当前） | 支持安全修复 |
+| `v1.1.x` | 不承诺安全修复 |
 | `v1.0.x` | 不承诺安全修复 |
 | 早于 v1.0 的 commit | 不支持 |
 
@@ -16,7 +17,7 @@
 
 ### 客户端侧
 
-- **本地存储权限**：`~/.aitrack/config.toml` 和 `~/.aitrack/records.db` 均以 `chmod 0600` 创建，防止同机其他用户读取。
+- **本地存储权限**：`~/.aitrack/config.toml` 和 `~/.aitrack/records.db` 均以 `chmod 0600` 原子创建，防止同机其他用户读取；写入过程先写临时文件再 rename，避免中断留下权限不当的半成品。
 - **record_sig HMAC**：每条记录在写入本地 SQLite 前计算 HMAC-SHA256 签名，绑定 `token_key + device_id + hostname + timestamp + tool + file_path + repo_url + current_sha + added_lines + removed_lines + sha256(diff_hunk)`，防止本地记录被篡改后重传（hardening point H1/H2）。
 - **请求级签名**：上传请求携带 `X-AiTrack-Signature`（HMAC 覆盖时间戳和请求体哈希），服务端校验 300 秒时间窗口，防止重放攻击。
 - **Myers/LCS 真差分**：使用 `similar` crate 计算最小差分，防止朴素行数统计被刷高（hardening point H4）。
@@ -34,7 +35,7 @@
 
 aitrack 的主要风险来自：
 
-- `config.toml` 中的 `api_token` 和 `hmac_secret` 泄露。
+- `config.toml` 中的 `credential`（包含 token 和 hmac_secret）泄露。
 - 本地 `records.db` 文件权限过宽被同机其他进程读取。
 - 服务端 `/admin/tokens` 接口暴露到不可信网络。
 - 上报数据中包含敏感 `diff_hunk` 内容（代码差分包含机密信息）。
@@ -45,13 +46,13 @@ aitrack 的主要风险来自：
 - 生产环境务必用网络 ACL 或 admin secret 头保护 `/admin/**` 接口。
 - `application.yml` 中的 `aitrack.encryption-key` 使用强随机值，不使用默认值。
 - 开启 `aitrack.repo-whitelist.enforce=true` 可拒绝未知仓库的上报。
-- 定期轮换 token 和 hmac_secret。
+- 定期轮换 credential（通过重新签发 token 实现）。
 
 ## 公开报告边界
 
 公开 Issue / PR / 讨论中不要包含：
 
-- 任何 `api_token`、`hmac_secret`、`X-AiTrack-Signature` 值。
+- 任何 `credential`、`X-AiTrack-Signature` 值（credential 包含 token 和 hmac_secret）。
 - 完整 `config.toml` 文件内容。
 - 含有真实代码内容的 `diff_hunk`。
 - 本地私有路径或仓库 URL。

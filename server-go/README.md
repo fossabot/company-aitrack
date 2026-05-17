@@ -34,6 +34,8 @@ Loaded from `config.yaml` (optional), then overridden by environment variables.
 | `max_added_lines` | `AITRACK_MAX_ADDED_LINES` | `5000` | Oversized threshold |
 | `repo_whitelist.enforce` | `AITRACK_REPO_WHITELIST_ENFORCE` | `false` | Hard-reject edits from non-whitelisted repos |
 | `repo_whitelist.urls` | `AITRACK_REPO_WHITELIST_URLS` | `""` | Comma-separated allowed repo URLs |
+| `max_batch_size` | `AITRACK_MAX_BATCH_SIZE` | `500` | Max edits per upload request (400 if exceeded) |
+| `max_request_body_bytes` | `AITRACK_MAX_REQUEST_BODY_BYTES` | `8388608` | Request body size limit in bytes, 8 MiB (413 if exceeded) |
 
 Example `config.yaml`:
 ```yaml
@@ -130,8 +132,9 @@ Field order and `\n` separator are byte-identical to the Rust client and Java se
 ## Security
 
 - `hmac_secret` encrypted at rest with AES-256-GCM (`secret_key`). Falls back to `plain:` prefix in dev mode when `secret_key` is unset.
-- All comparisons use constant-time equality to prevent timing attacks.
+- All HMAC comparisons use **constant-time equality** (`subtle.ConstantTimeCompare`) to prevent timing attacks.
 - `X-Admin-Key` verified with constant-time compare; server returns 503 if not configured.
+- Request body limited to 8 MiB via `http.MaxBytesReader`; `edits` array limited to 500 entries per request.
 - SQL uses parameterised queries throughout (no string interpolation).
 
 ## Database
@@ -157,7 +160,7 @@ SQLite via `modernc.org/sqlite` (pure Go, no cgo). Schema: `tokens`, `edit_recor
 
 ```
 module github.com/aitrack/server
-go 1.22
+go 1.24
 ```
 
-Key dependencies: `github.com/go-chi/chi/v5`, `modernc.org/sqlite`, `gopkg.in/yaml.v3`.
+Key dependencies: `github.com/go-chi/chi/v5` (v5.2.5), `modernc.org/sqlite`, `gopkg.in/yaml.v3`.

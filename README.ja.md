@@ -42,17 +42,18 @@ AI コーディングツール（Claude Code、Codex CLI、Cursor）が開発チ
 
 ## アーキテクチャ
 
-aitrack はプロトコル v1.1 で通信する3つの独立したコンポーネントで構成されています：
+aitrack はプロトコル v1.2 で通信する3つの独立したコンポーネントで構成されています：
 
 | コンポーネント | スタック | 役割 |
 |--------------|---------|------|
 | **Rust クライアント** `aitrack` | Rust · シングルバイナリ · ランタイム依存なし | フックのインストール、編集イベントのキャプチャ、HMAC 署名、データのアップロード |
-| **Java サーバー** `aitrack-server` | Java 17 · Spring Boot 3.2.x · H2 / PostgreSQL | 10ステップ検証チェーン、信頼できる帰属、効率クエリ（主要実装） |
-| **Go サーバー** `aitrack-server-go` | Go 1.22 · chi v5 · SQLite | Java と機能同等の軽量代替実装 |
+| **Java サーバー** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10ステップ検証チェーン、信頼できる帰属、効率クエリ（主要実装） |
+| **Go サーバー** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite | Java と機能同等の軽量代替実装 |
 
-**プロトコル v1.1 の主要設計：**
+**プロトコル v1.2 の主要設計：**
 
 - すべてのアップロードリクエストには `record_sig`（11のコアフィールドをカバーする HMAC-SHA256）とリクエストレベルの HMAC 署名が含まれる
+- `POST /admin/tokens` はトークンと HMAC シークレットを統合した単一の `credential` フィールド（`<token>-<hmac_secret>`）を返す
 - `hostname` フィールド（v1.1 で新規追加）により、1つのトークンを複数マシンで使用した場合にデバイス次元での手動レビューが可能
 - クライアントのローカルデータベース `~/.aitrack/records.db` のパーミッションは 0600、`hmac_secret` は AES-256-GCM で暗号化して保存
 
