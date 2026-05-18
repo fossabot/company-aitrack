@@ -199,7 +199,7 @@ bash e2e/run.sh both
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署指南（Docker、PostgreSQL 切换、生产配置） |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发者指南（本地构建、模块结构、贡献流程） |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | 安全模型（威胁建模、HMAC 规范、防御层次） |
-| [TESTING.md](TESTING.md) | 测试体系（三层架构、工厂模式、覆盖率门槛、Docker 验证） |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系（三层架构、工厂模式、覆盖率门槛、Docker 验证） |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南（提交规范、PR 流程、测试要求） |
 | [SECURITY.md](SECURITY.md) | 安全漏洞报告流程 |

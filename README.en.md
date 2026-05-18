@@ -199,7 +199,7 @@ bash e2e/run.sh both
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment guide (Docker, PostgreSQL migration, production configuration) |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Developer guide (local build, module structure, contribution workflow) |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Security model (threat modeling, HMAC spec, defense layers) |
-| [TESTING.md](TESTING.md) | Testing system (three-tier architecture, factory pattern, coverage thresholds, Docker verification) |
+| [docs/TESTING.md](docs/TESTING.md) | Testing system (three-tier architecture, factory pattern, coverage thresholds, Docker verification) |
 | [CHANGELOG.md](CHANGELOG.md) | Version changelog |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guide (commit conventions, PR process, testing requirements) |
 | [SECURITY.md](SECURITY.md) | Security vulnerability reporting process |
