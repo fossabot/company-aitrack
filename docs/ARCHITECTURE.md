@@ -264,6 +264,14 @@ Embeddings are not populated automatically. To enable ANN search, run the backfi
 
 这两类端点与现有结构化查询端点并列存在，不破坏现有 API 兼容性，并在 `CONTRACT.md` 中增加对应 schema 定义。
 
+### Phase 3 Delivered (2026 Q4)
+
+- **Developer Profile API**: `GET /api/v1/ai-track/profiles/{token_key}`, Java + Go dual implementation
+- **Three-dimensional profiling**: frequency (daily/weekly trend), depth (line distribution, p50/p90), scenario distribution (heuristic path classification)
+- **Tool breakdown**: counts per tool field (claude/codex/cursor)
+- **Daily aggregation job**: Java `ProfileAggregationJob` (@Scheduled daily 02:00); Go equivalent
+- **Auth**: X-Admin-Key, 403/404/200; no ParadeDB dependency (works with H2/SQLite)
+
 ---
 
 ## 安全设计原则

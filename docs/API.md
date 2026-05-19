@@ -801,3 +801,48 @@ curl -s "http://localhost:8080/api/v1/ai-track/devices" \
 | 400 | `embedding` missing, not 384-dimensional, or `limit` > 50 |
 | 403 | Missing or invalid `X-Admin-Key` |
 | 501 | Server not in PostgreSQL/ParadeDB mode, or no embeddings stored |
+
+---
+
+## Phase 3: Developer Usage Profiles
+
+### GET /api/v1/ai-track/profiles/{token_key}
+
+Returns the AI tool usage profile for a developer, computed on-demand from `edit_records`.
+
+**Auth**: `X-Admin-Key` header.
+
+**Path parameter**: `token_key` (string) — token identifier, format `aitrack_XXXXX`
+
+**Example**:
+```bash
+curl -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
+  http://localhost:8080/api/v1/ai-track/profiles/aitrack_abc12ef90
+```
+
+**Response (200)**:
+```json
+{
+  "token_key": "aitrack_abc12…ef90",
+  "owner": "alice",
+  "total_edits": 247,
+  "total_added_lines": 8420,
+  "total_removed_lines": 3190,
+  "first_seen": "2026-03-01T09:15:00Z",
+  "last_seen": "2026-05-19T14:22:00Z",
+  "generated_at": "2026-05-19T14:30:00Z",
+  "frequency": {
+    "daily_avg_30d": 8.3,
+    "weekly_avg_12w": 41.2,
+    "daily_trend": [{"date": "2026-05-13", "count": 12}]
+  },
+  "depth": {
+    "avg_lines": 47.2, "p50_lines": 18, "p90_lines": 142,
+    "small_count": 89, "medium_count": 112, "large_count": 46
+  },
+  "scenarios": {"test": 43, "docs": 12, "config": 8, "feature": 148, "other": 36},
+  "tools": {"claude": 210, "codex": 28, "cursor": 9}
+}
+```
+
+**Errors**: 403 (bad key), 404 (token not found)

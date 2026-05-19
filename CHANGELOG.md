@@ -4,6 +4,26 @@
 
 ---
 
+## [v1.4.0] — 2026-05-19
+
+### Added
+
+- **Phase 3: Developer AI Usage Profiles**
+  - Java `ProfileController`: `GET /api/v1/ai-track/profiles/{token_key}`, X-Admin-Key auth
+  - Java `ProfileService`: on-demand three-dimensional profile (frequency/depth/scenarios/tools), `classifyScenario()` path heuristic
+  - Java `ProfileAggregationJob`: `@Scheduled(cron="0 0 2 * * *")` daily warm-up
+  - Go `ProfileHandler`: feature-equivalent to Java, same JSON schema
+  - `EditRecordRepository.findByTokenKeyAndStatusNot()`, `TokenRepository.findByTokenKeyAndActiveTrue()`
+  - `@EnableScheduling` added to `AiTrackServerApplication`
+  - 206 Java tests pass; Go total coverage 92.4%
+
+### Docs
+
+- `docs/PRIVACY.md` (both repos): data collection transparency document
+- `CONTRACT.md` §5: Phase 3 profile endpoint schema
+
+---
+
 ## v1.3.0 — 2026-05-19
 
 ### 发布说明
