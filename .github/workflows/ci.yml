@@ -46,7 +46,7 @@ jobs:
         run: docker build -f docker/Dockerfile.server-java .
 
   server-go:
-    name: Build & test server-go (Go 1.22)
+    name: Build & test server-go (Go 1.25)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
