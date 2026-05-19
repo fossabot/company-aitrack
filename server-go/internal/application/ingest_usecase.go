@@ -1,6 +1,7 @@
 package application
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -45,21 +46,33 @@ func (s *IngestService) Ingest(token *model.Token, req *model.EditBatchRequest) 
 				Reason: strings.Join(result.Reasons, ","),
 			})
 		case service.OutcomeFlagged:
+			if err := s.saveEdit(token, &editCopy, "FLAGGED", result.Reasons); err != nil {
+				resp.Rejected = append(resp.Rejected, model.IndexedReason{
+					Index:  i,
+					Reason: fmt.Sprintf("save_error: %v", err),
+				})
+				continue
+			}
 			resp.Flagged = append(resp.Flagged, model.IndexedReason{
 				Index:  i,
 				Reason: strings.Join(result.Reasons, ","),
 			})
-			s.saveEdit(token, &editCopy, "FLAGGED", result.Reasons)
 		case service.OutcomeAccepted:
+			if err := s.saveEdit(token, &editCopy, "ACCEPTED", nil); err != nil {
+				resp.Rejected = append(resp.Rejected, model.IndexedReason{
+					Index:  i,
+					Reason: fmt.Sprintf("save_error: %v", err),
+				})
+				continue
+			}
 			resp.Accepted++
-			s.saveEdit(token, &editCopy, "ACCEPTED", nil)
 		}
 	}
 
 	return resp
 }
 
-func (s *IngestService) saveEdit(token *model.Token, edit *model.EditDTO, status string, flags []string) {
+func (s *IngestService) saveEdit(token *model.Token, edit *model.EditDTO, status string, flags []string) error {
 	rec := &model.EditRecord{
 		TokenKey:     token.TokenKey,
 		DeviceID:     edit.DeviceID,
@@ -94,7 +107,7 @@ func (s *IngestService) saveEdit(token *model.Token, edit *model.EditDTO, status
 	if len(flags) > 0 {
 		rec.Flags = strings.Join(flags, ",")
 	}
-	s.editRepo.Save(rec)
+	return s.editRepo.Save(rec)
 }
 
 // QueryEdits returns a paginated list of stored edit records.
