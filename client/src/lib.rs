@@ -233,7 +233,8 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     let inserted = adapter::sqlite::insert_record(&conn, &record)?;
 
     if inserted && !api_url.is_empty() && !credential.is_empty() {
-        uploader::flush_unsynced(&conn, &api_url, &credential).await?;
+        let http_uploader = adapter::http::upload::HttpUploader::new(api_url.clone(), credential.clone());
+        uploader::flush_unsynced(&conn, &http_uploader).await?;
 
         // Throttled heartbeat
         heartbeat::send_heartbeat(&conn, &api_url, &credential, false).await?;

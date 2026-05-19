@@ -1,77 +1,22 @@
 use anyhow::Result;
-use chrono::Utc;
-use reqwest::Client;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 
+use crate::adapter::http::upload::{HttpUploader, PostBatchResult};
 use crate::adapter::sqlite::{fetch_unsynced, increment_retry, mark_synced};
 use crate::config::{load_config, mask_token, split_credential};
-use crate::domain::crypto::compute_request_sig;
 
 const BATCH_LIMIT: i64 = 200;
 
-#[derive(Serialize)]
-struct UploadPayload {
-    device_id: String,
-    client_version: String,
-    edits: Vec<EditRecord>,
-}
-
-#[derive(Serialize)]
-struct EditRecord {
-    tool: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_version: Option<String>,
-    provider: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    model: Option<String>,
-    session_id: String,
-    repo_url: String,
-    branch: String,
-    current_sha: String,
-    file_path: String,
-    added_lines: i64,
-    removed_lines: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    diff_hunk: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    metadata: Option<String>,
-    timestamp: String,
-    device_id: String,
-    hostname: String,
-    record_sig: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    prompt_summary: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct UploadResponse {
-    accepted: Option<i64>,
-    #[serde(default)]
-    rejected: Vec<IndexedItem>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    flagged: Vec<IndexedItem>,
-}
-
-#[derive(Deserialize)]
-struct IndexedItem {
-    index: usize,
-    #[allow(dead_code)]
-    reason: Option<String>,
-}
-
 /// Flush unsynced records to the server.
 ///
-/// `credential` is the combined `"<token>-<hmac_secret>"` string.  The token is
-/// extracted internally for the `Authorization` header; the hmac_secret is used
-/// for request signing and never sent over the wire.
-pub async fn flush_unsynced(conn: &Connection, api_url: &str, credential: &str) -> Result<()> {
-    if api_url.starts_with("http://") {
-        eprintln!("[aitrack] WARNING: api_url uses plaintext HTTP; token will be sent unencrypted");
-    }
-
-    let (token, hmac_secret) = match split_credential(credential) {
+/// `uploader` must already be constructed with the target `api_url` and
+/// `credential`.  This function handles all DB bookkeeping:
+/// - Fetching unsynced records
+/// - Delegating the HTTP POST to `uploader.post_batch`
+/// - Marking accepted / flagged records as synced
+/// - Incrementing the retry counter for rejected records or on transient errors
+pub async fn flush_unsynced(conn: &Connection, uploader: &HttpUploader) -> Result<()> {
+    let (token, _) = match split_credential(&uploader.credential) {
         Ok(parts) => parts,
         Err(e) => {
             eprintln!("[aitrack] invalid credential: {e}");
@@ -90,96 +35,34 @@ pub async fn flush_unsynced(conn: &Connection, api_url: &str, credential: &str) 
 
     let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
 
-    let edits: Vec<EditRecord> = rows
-        .iter()
-        .map(|r| EditRecord {
-            tool: r.tool.clone(),
-            tool_version: r.tool_version.clone(),
-            provider: r.provider.clone(),
-            model: r.model.clone(),
-            session_id: r.session_id.clone(),
-            repo_url: r.repo_url.clone(),
-            branch: r.branch.clone(),
-            current_sha: r.current_sha.clone(),
-            file_path: r.file_path.clone(),
-            added_lines: r.added_lines,
-            removed_lines: r.removed_lines,
-            diff_hunk: r.diff_hunk.clone(),
-            metadata: r.metadata.clone(),
-            timestamp: r.timestamp.clone(),
-            device_id: r.device_id.clone(),
-            hostname: r.hostname.clone(),
-            record_sig: r.record_sig.clone(),
-            prompt_summary: r.prompt_summary.clone(),
-        })
-        .collect();
+    match uploader.post_batch(&rows, &device_id).await {
+        PostBatchResult::Success(ur) => {
+            // rejected: increment retry counter
+            let rejected_ids: Vec<i64> = ur
+                .rejected
+                .iter()
+                .filter_map(|item| ids.get(item.index).copied())
+                .collect();
+            increment_retry(conn, &rejected_ids)?;
 
-    let payload = UploadPayload {
-        device_id: device_id.clone(),
-        client_version: env!("CARGO_PKG_VERSION").to_string(),
-        edits,
-    };
-
-    let body_bytes = serde_json::to_vec(&payload)?;
-    let unix_ts = Utc::now().timestamp() as u64;
-    let sig = if hmac_secret.is_empty() {
-        String::new()
-    } else {
-        compute_request_sig(&hmac_secret, unix_ts, &body_bytes)
-    };
-
-    let url = format!("{api_url}/api/v1/ai-track/edits");
-    let client = Client::new();
-    let mut req = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .header("Content-Type", "application/json")
-        .header("X-AiTrack-Device", &device_id)
-        .header(
-            "X-AiTrack-Client",
-            format!("aitrack/{}", env!("CARGO_PKG_VERSION")),
-        )
-        .header("X-AiTrack-Timestamp", unix_ts.to_string())
-        .body(body_bytes);
-
-    if !sig.is_empty() {
-        req = req.header("X-AiTrack-Signature", &sig);
-    }
-
-    match req.send().await {
-        Ok(resp) if resp.status().is_success() => {
-            // Parse response to distinguish accepted/rejected/flagged
-            if let Ok(ur) = resp.json::<UploadResponse>().await {
-                // rejected: increment retry
-                let rejected_ids: Vec<i64> = ur
-                    .rejected
-                    .iter()
-                    .filter_map(|item| ids.get(item.index).copied())
-                    .collect();
-                increment_retry(conn, &rejected_ids)?;
-
-                // accepted + flagged: mark synced
-                let _accepted_count = ur.accepted.unwrap_or(0) as usize;
-                let accepted_and_flagged: Vec<i64> = ids
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| {
-                        !ur.rejected.iter().any(|r| r.index == *i)
-                    })
-                    .map(|(_, id)| *id)
-                    .collect();
-                mark_synced(conn, &accepted_and_flagged)?;
-            } else {
-                mark_synced(conn, &ids)?;
-            }
+            // accepted + flagged: mark synced
+            let accepted_and_flagged: Vec<i64> = ids
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !ur.rejected.iter().any(|r| r.index == *i))
+                .map(|(_, id)| *id)
+                .collect();
+            mark_synced(conn, &accepted_and_flagged)?;
         }
-        Ok(resp) => {
-            eprintln!("[aitrack] upload failed: HTTP {}", resp.status());
+        PostBatchResult::UnparseableOk => {
+            // 2xx but no parseable body — treat all as synced (conservative)
+            mark_synced(conn, &ids)?;
+        }
+        PostBatchResult::TransientError => {
             increment_retry(conn, &ids)?;
         }
-        Err(e) => {
-            eprintln!("[aitrack] upload error: {e}");
-            increment_retry(conn, &ids)?;
+        PostBatchResult::CredentialError => {
+            // Permanent credential error — skip silently
         }
     }
 
@@ -193,6 +76,7 @@ mod tests {
     use wiremock::matchers::{method, path};
 
     use crate::adapter::sqlite::{self as db, ensure_kv_table, fetch_unsynced, pending_count};
+    use crate::adapter::http::upload::HttpUploader;
     use crate::config::mask_token;
     use crate::testkit::factories::EditRecordFactory;
     use super::flush_unsynced;
@@ -257,11 +141,16 @@ mod tests {
         conn.query_row("SELECT id FROM records ORDER BY id DESC LIMIT 1", [], |r| r.get(0)).unwrap()
     }
 
+    fn make_uploader(api_url: &str) -> HttpUploader {
+        HttpUploader::new(api_url.to_string(), TEST_CREDENTIAL.to_string())
+    }
+
     #[tokio::test]
     async fn flush_empty_db_is_noop() {
         let conn = open_test_db();
         // No records → flush should return Ok without making HTTP calls
-        flush_unsynced(&conn, "http://localhost:9999", TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader("http://localhost:9999");
+        flush_unsynced(&conn, &uploader).await.unwrap();
     }
 
     #[tokio::test]
@@ -284,7 +173,8 @@ mod tests {
         let masked = mask_token(TEST_TOKEN);
         assert_eq!(pending_count(&conn, &masked), 1);
 
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         assert_eq!(pending_count(&conn, &masked), 0, "accepted → synced");
     }
@@ -307,7 +197,8 @@ mod tests {
         insert_factory_record(&conn, 2, TEST_TOKEN);
 
         let masked = mask_token(TEST_TOKEN);
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         // Still unsynced (retry_count=1, not yet at 5)
         assert_eq!(pending_count(&conn, &masked), 1, "rejected → still pending");
@@ -334,7 +225,8 @@ mod tests {
         insert_factory_record(&conn, 3, TEST_TOKEN);
         let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         // flagged → synced per contract
         assert_eq!(pending_count(&conn, &masked), 0, "flagged → synced");
@@ -353,7 +245,8 @@ mod tests {
         insert_factory_record(&conn, 4, TEST_TOKEN);
         let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
         assert_eq!(rows[0].retry_count, 1, "HTTP 500 → retry incremented");
@@ -366,7 +259,8 @@ mod tests {
         let masked = mask_token(TEST_TOKEN);
 
         // Use an invalid URL → connection error
-        flush_unsynced(&conn, "http://127.0.0.1:1", TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader("http://127.0.0.1:1");
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
         assert_eq!(rows[0].retry_count, 1, "connection error → retry incremented");
@@ -392,7 +286,8 @@ mod tests {
         insert_factory_record(&conn, 11, TEST_TOKEN);
         let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         // index 0 → accepted → synced; index 1 → rejected → retry
         // One still pending
@@ -413,7 +308,8 @@ mod tests {
         let id = insert_factory_record(&conn, 6, TEST_TOKEN);
         let masked = mask_token(TEST_TOKEN);
 
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
 
         // Fallback: mark_synced all ids
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
@@ -547,7 +443,8 @@ mod tests {
         assert_eq!(pending_count(&conn, &token_key), 1);
 
         // 7. Upload and verify synced
-        flush_unsynced(&conn, &mock_server.uri(), TEST_CREDENTIAL).await.unwrap();
+        let uploader = make_uploader(&mock_server.uri());
+        flush_unsynced(&conn, &uploader).await.unwrap();
         assert_eq!(pending_count(&conn, &token_key), 0, "after accepted upload: synced");
 
         // old has 1 line ("fn old()"), new has 2 lines ("fn new()" + "fn added()")
