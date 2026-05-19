@@ -13,7 +13,7 @@ import (
 // Build wires all dependencies and returns an http.Handler ready to serve.
 // The caller owns closing the DB.
 func Build(cfg *config.Config) (http.Handler, func(), error) {
-	database, err := db.Open(cfg.DB.Path)
+	database, err := db.Open(cfg.DB.Path, db.WithDatabaseURL(cfg.DB.DatabaseURL))
 	if err != nil {
 		return nil, nil, fmt.Errorf("open db: %w", err)
 	}

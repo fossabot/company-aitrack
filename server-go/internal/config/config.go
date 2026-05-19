@@ -14,7 +14,8 @@ type Config struct {
 	} `yaml:"server"`
 
 	DB struct {
-		Path string `yaml:"path"`
+		Path        string `yaml:"path"`
+		DatabaseURL string `yaml:"database_url"`
 	} `yaml:"db"`
 
 	SecretKey string `yaml:"secret_key"`
@@ -74,6 +75,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("AITRACK_DB_PATH"); v != "" {
 		cfg.DB.Path = v
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		cfg.DB.DatabaseURL = v
 	}
 	if v := os.Getenv("AITRACK_TIMESTAMP_WINDOW"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {

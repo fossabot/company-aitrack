@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.List;
 
 @Repository
 public interface EditRecordRepository extends JpaRepository<EditRecordEntity, Long> {
@@ -59,4 +60,9 @@ public interface EditRecordRepository extends JpaRepository<EditRecordEntity, Lo
            "SUM(CASE WHEN e.status = 'REJECTED' THEN 1 ELSE 0 END), " +
            "MAX(e.receivedAt) FROM EditRecordEntity e GROUP BY e.hostname")
     java.util.List<Object[]> aggregateByHostname();
+
+    // BM25 full-text search via ParadeDB — only functional on the postgres profile.
+    // Will fail if invoked against H2; not wired to any controller yet (Phase DB-2).
+    @Query(value = "SELECT * FROM edit_records WHERE diff_hunk ||| :query ORDER BY paradedb.score(id) DESC LIMIT :limit", nativeQuery = true)
+    List<EditRecordEntity> searchBm25(@Param("query") String query, @Param("limit") int limit);
 }

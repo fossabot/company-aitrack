@@ -86,6 +86,13 @@ public class EditRecordEntity {
     @Column(name = "received_at", nullable = false)
     private Instant receivedAt = Instant.now();
 
+    @Column(name = "prompt_summary", nullable = true, columnDefinition = "TEXT")
+    private String promptSummary;
+
+    @Lob
+    @Column(name = "embedding", nullable = true)
+    private byte[] embedding;
+
     public enum RecordStatus {
         ACCEPTED, FLAGGED, REJECTED
     }

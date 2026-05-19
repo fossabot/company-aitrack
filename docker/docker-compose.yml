@@ -6,6 +6,22 @@ version: "3.9"
 #   docker compose up                   → starts nothing (profiles required)
 
 services:
+  db:
+    image: paradedb/paradedb:latest
+    environment:
+      POSTGRES_USER: aitrack
+      POSTGRES_PASSWORD: aitrack_secret
+      POSTGRES_DB: aitrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   server-java:
     profiles: ["java"]
     build:
@@ -52,3 +68,4 @@ services:
 volumes:
   aitrack-java-data:
   aitrack-go-data:
+  pgdata: {}

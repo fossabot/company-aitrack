@@ -56,3 +56,22 @@ aitrack:
   # REQUIRED before any deployment. Set via AITRACK_ADMIN_KEY environment variable.
   # Example:  openssl rand -hex 32
   admin-key: ""
+
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: jdbc:postgresql://${AITRACK_DB_HOST:localhost}:${AITRACK_DB_PORT:5432}/${AITRACK_DB_NAME:aitrack}
+    driver-class-name: org.postgresql.Driver
+    username: ${AITRACK_DB_USER:aitrack}
+    password: ${AITRACK_DB_PASSWORD:aitrack_secret}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  h2:
+    console:
+      enabled: false
