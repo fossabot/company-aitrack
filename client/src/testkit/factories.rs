@@ -565,7 +565,7 @@ mod tests {
     fn tampered_expired_timestamp_sig_vs_real() {
         // The expired record's sig was computed over the tampered timestamp,
         // so it will differ from a sig computed over a fresh timestamp.
-        use crate::crypto::compute_record_sig;
+        use crate::domain::crypto::compute_record_sig;
         let rec = tampered_expired_timestamp(5);
         let fresh_rec = EditRecordFactory::new(5).build();
         let sig_expired = compute_record_sig(

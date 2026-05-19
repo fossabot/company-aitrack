@@ -1,10 +1,6 @@
 pub mod adapter;
-pub mod adapters;
 pub mod cli;
 pub mod config;
-pub mod crypto;
-pub mod db;
-pub mod diff;
 pub mod domain;
 pub mod git;
 pub mod heartbeat;
@@ -44,7 +40,7 @@ pub fn print_banner() {
     );
 }
 use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
-use db::{
+use adapter::sqlite::{
     clean_all, clean_synced, inspect_records, insert_prompt_context, get_recent_prompt, open_db,
     pending_count, token_breakdown,
 };
@@ -99,7 +95,7 @@ async fn handle_init(args: cli::InitArgs) -> Result<()> {
     // Failure is non-fatal — keyword integrity is best-effort.
     {
         let kw_path = config::config_dir().join("keywords.db");
-        if let Err(e) = db::keyword_store::open_keyword_store(&kw_path) {
+        if let Err(e) = adapter::sqlite::keyword_store::open_keyword_store(&kw_path) {
             eprintln!("[aitrack] keyword store init warning: {e}");
         }
     }
@@ -169,9 +165,9 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     let stdin_json = raw.trim();
 
     let record_opt = match args.tool.as_str() {
-        "claude" => adapters::parse_claude(stdin_json),
-        "codex" => adapters::parse_codex(stdin_json),
-        "cursor" => adapters::parse_cursor(stdin_json),
+        "claude" => adapter::event::parse_claude(stdin_json),
+        "codex" => adapter::event::parse_codex(stdin_json),
+        "cursor" => adapter::event::parse_cursor(stdin_json),
         other => {
             eprintln!("[aitrack] unknown tool: {other}");
             return Ok(());
@@ -214,7 +210,7 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
         .unwrap_or_else(|_| String::new());
 
     // Compute record signature
-    record.record_sig = crypto::compute_record_sig(
+    record.record_sig = domain::crypto::compute_record_sig(
         &hmac_secret,
         &record.token_key,
         &record.device_id,
@@ -234,7 +230,7 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     // Attach most recent prompt for this session
     record.prompt_summary = get_recent_prompt(&conn, &record.session_id);
 
-    let inserted = db::insert_record(&conn, &record)?;
+    let inserted = adapter::sqlite::insert_record(&conn, &record)?;
 
     if inserted && !api_url.is_empty() && !credential.is_empty() {
         uploader::flush_unsynced(&conn, &api_url, &credential).await?;

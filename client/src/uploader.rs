@@ -4,9 +4,9 @@ use reqwest::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
+use crate::adapter::sqlite::{fetch_unsynced, increment_retry, mark_synced};
 use crate::config::{load_config, mask_token, split_credential};
-use crate::crypto::compute_request_sig;
-use crate::db::{fetch_unsynced, increment_retry, mark_synced};
+use crate::domain::crypto::compute_request_sig;
 
 const BATCH_LIMIT: i64 = 200;
 
@@ -192,9 +192,7 @@ mod tests {
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
 
-    use crate::db::{
-        self, ensure_kv_table, fetch_unsynced, pending_count,
-    };
+    use crate::adapter::sqlite::{self as db, ensure_kv_table, fetch_unsynced, pending_count};
     use crate::config::mask_token;
     use crate::testkit::factories::EditRecordFactory;
     use super::flush_unsynced;
@@ -465,7 +463,7 @@ mod tests {
     #[test]
     fn tampered_record_sig_is_not_valid_hmac() {
         use crate::testkit::factories::tampered_record_sig;
-        use crate::crypto::compute_record_sig;
+        use crate::domain::crypto::compute_record_sig;
         let rec = tampered_record_sig(42);
         let real_sig = compute_record_sig(
             "some-secret",
@@ -487,8 +485,8 @@ mod tests {
     /// Capture chain integration test: parse → diff → sig → db insert → upload → mark synced.
     #[tokio::test]
     async fn capture_chain_parse_diff_sig_db_upload() {
-        use crate::adapters::parse_claude;
-        use crate::crypto::compute_record_sig;
+        use crate::adapter::event::parse_claude;
+        use crate::domain::crypto::compute_record_sig;
         use crate::testkit::factories::ClaudeHookPayloadFactory;
 
         let mock_server = MockServer::start().await;
@@ -572,7 +570,7 @@ mod tests {
         rec.repo_url = "git@github.com:org/repo.git".to_string();
         let inserted = db::insert_record(&conn, &rec).unwrap();
         assert!(inserted);
-        let rows = crate::db::fetch_unsynced(&conn, &masked, 10).unwrap();
+        let rows = crate::adapter::sqlite::fetch_unsynced(&conn, &masked, 10).unwrap();
         let found = rows.iter().find(|r| r.added_lines == 99_999_999);
         assert!(found.is_some(), "oversized record should be in DB");
     }

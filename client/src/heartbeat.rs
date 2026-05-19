@@ -4,9 +4,9 @@ use reqwest::Client;
 use rusqlite::Connection;
 use serde::Serialize;
 
+use crate::adapter::sqlite::{ensure_kv_table, get_last_heartbeat, pending_count_all, set_last_heartbeat};
 use crate::config::{load_config, mask_token, split_credential};
-use crate::crypto::compute_request_sig;
-use crate::db::{ensure_kv_table, get_last_heartbeat, pending_count_all, set_last_heartbeat};
+use crate::domain::crypto::compute_request_sig;
 use crate::init::{has_claude_hook, has_codex_hook, has_cursor_hook};
 
 const HEARTBEAT_INTERVAL_SECS: i64 = 3600; // 1 hour
@@ -133,7 +133,7 @@ mod tests {
     use rusqlite::Connection;
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
-    use crate::db::{ensure_kv_table, get_last_heartbeat, set_last_heartbeat};
+    use crate::adapter::sqlite::{ensure_kv_table, get_last_heartbeat, set_last_heartbeat};
     use super::send_heartbeat;
 
     fn open_test_db() -> Connection {
