@@ -65,4 +65,7 @@ public interface EditRecordRepository extends JpaRepository<EditRecordEntity, Lo
     // Will fail if invoked against H2; not wired to any controller yet (Phase DB-2).
     @Query(value = "SELECT * FROM edit_records WHERE diff_hunk ||| :query ORDER BY paradedb.score(id) DESC LIMIT :limit", nativeQuery = true)
     List<EditRecordEntity> searchBm25(@Param("query") String query, @Param("limit") int limit);
+
+    // Phase 3: used by ProfileService to load all non-rejected records for a token
+    List<EditRecordEntity> findByTokenKeyAndStatusNot(String tokenKey, EditRecordEntity.RecordStatus status);
 }

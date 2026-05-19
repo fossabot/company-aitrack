@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"time"
 
 	"github.com/aitrack/server/internal/config"
-	"github.com/aitrack/server/internal/db"
+	dbpkg "github.com/aitrack/server/internal/db"
 	"github.com/aitrack/server/internal/handler"
 	"github.com/aitrack/server/internal/model"
 	"github.com/aitrack/server/internal/service"
@@ -22,6 +23,7 @@ import (
 // testEnv holds a fully wired server for handler tests.
 type testEnv struct {
 	router     http.Handler
+	db         *sql.DB
 	tokenSvc   *service.TokenService
 	sig        *service.SignatureService
 	cfg        *config.Config
@@ -31,7 +33,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	database, err := db.Open(":memory:")
+	database, err := dbpkg.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
@@ -66,7 +68,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	statsH := handler.NewStatsHandler(auth, statsSvc)
 	searchH := handler.NewSearchHandler(database, cfg.AdminKey, false /* SQLite in tests */)
 	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, false /* SQLite in tests */)
-	router := handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH)
+	profileH := handler.NewProfileHandler(database, cfg.AdminKey)
+	router := handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH, profileH)
 
 	// Pre-create a token for API tests
 	resp, err := tokenSvc.CreateToken(&model.CreateTokenRequest{Owner: "tester"})
@@ -80,6 +83,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	return &testEnv{
 		router:     router,
+		db:         database,
 		tokenSvc:   tokenSvc,
 		sig:        sig,
 		cfg:        cfg,

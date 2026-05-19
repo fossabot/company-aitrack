@@ -141,3 +141,39 @@ type EditQueryResult struct {
 	Size    int          `json:"size"`
 	Records []EditRecord `json:"records"`
 }
+
+// ProfileDto is returned by GET /api/v1/ai-track/profiles/{token_key}
+type ProfileDto struct {
+	TokenKey          string           `json:"token_key"`
+	Owner             string           `json:"owner"`
+	TotalEdits        int64            `json:"total_edits"`
+	TotalAddedLines   int64            `json:"total_added_lines"`
+	TotalRemovedLines int64            `json:"total_removed_lines"`
+	FirstSeen         *string          `json:"first_seen"`   // ISO-8601 UTC, nil if no records
+	LastSeen          *string          `json:"last_seen"`    // ISO-8601 UTC
+	GeneratedAt       string           `json:"generated_at"` // ISO-8601 UTC
+	Frequency         *FrequencyStats  `json:"frequency"`
+	Depth             *DepthStats      `json:"depth"`
+	Scenarios         map[string]int64 `json:"scenarios"`
+	Tools             map[string]int64 `json:"tools"`
+}
+
+type FrequencyStats struct {
+	DailyAvg30d  float64    `json:"daily_avg_30d"`
+	WeeklyAvg12w float64    `json:"weekly_avg_12w"`
+	DailyTrend   []DayCount `json:"daily_trend"`
+}
+
+type DayCount struct {
+	Date  string `json:"date"`  // "2026-05-19"
+	Count int64  `json:"count"`
+}
+
+type DepthStats struct {
+	AvgLines    float64 `json:"avg_lines"`
+	P50Lines    int64   `json:"p50_lines"`
+	P90Lines    int64   `json:"p90_lines"`
+	SmallCount  int64   `json:"small_count"`  // total < 10
+	MediumCount int64   `json:"medium_count"` // 10 <= total <= 100
+	LargeCount  int64   `json:"large_count"`  // total > 100
+}

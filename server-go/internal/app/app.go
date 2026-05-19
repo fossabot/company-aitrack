@@ -48,6 +48,7 @@ func Build(cfg *config.Config) (http.Handler, func(), error) {
 	statsH := handler.NewStatsHandler(auth, statsSvc)
 	searchH := handler.NewSearchHandler(database, cfg.AdminKey, isPostgres)
 	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, isPostgres)
+	profileH := handler.NewProfileHandler(database, cfg.AdminKey)
 
-	return handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH), cleanup, nil
+	return handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH, profileH), cleanup, nil
 }

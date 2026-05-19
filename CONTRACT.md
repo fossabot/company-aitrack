@@ -411,3 +411,49 @@ Find edit records semantically similar to a given embedding vector using pgvecto
 | 400 | `embedding` missing, wrong dimension (must be 384), or `limit` > 50 |
 | 403 | Missing or invalid `X-Admin-Key` |
 | 501 | Server running in embedded DB mode, or no embeddings stored yet |
+
+---
+
+## 5. Phase 3: Developer Profile API
+
+### Endpoint
+
+`GET /api/v1/ai-track/profiles/{token_key}`
+
+**Auth**: `X-Admin-Key` header
+
+**Path param**: `token_key` (string) — token identifier, format `aitrack_XXXXX`
+
+**Response (200)**:
+
+```json
+{
+  "token_key": "aitrack_abc12…ef90",
+  "owner": "alice",
+  "total_edits": 247,
+  "total_added_lines": 8420,
+  "total_removed_lines": 3190,
+  "first_seen": "2026-03-01T09:15:00Z",
+  "last_seen": "2026-05-19T14:22:00Z",
+  "generated_at": "2026-05-19T14:30:00Z",
+  "frequency": {
+    "daily_avg_30d": 8.3,
+    "weekly_avg_12w": 41.2,
+    "daily_trend": [{"date": "2026-05-19", "count": 12}]
+  },
+  "depth": {
+    "avg_lines": 47.2,
+    "p50_lines": 18,
+    "p90_lines": 142,
+    "small_count": 89,
+    "medium_count": 112,
+    "large_count": 46
+  },
+  "scenarios": {"test": 43, "docs": 12, "config": 8, "feature": 148, "other": 36},
+  "tools": {"claude": 210, "codex": 28, "cursor": 9}
+}
+```
+
+**Errors**: 403 (invalid admin key), 404 (no records for token_key)
+
+**Computation**: Includes ACCEPTED + FLAGGED records, excludes REJECTED. Computed on-demand (Phase 4 will add caching).

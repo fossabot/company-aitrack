@@ -9,4 +9,7 @@ import java.util.Optional;
 @Repository
 public interface TokenRepository extends JpaRepository<TokenEntity, Long> {
     Optional<TokenEntity> findByTokenHashAndActiveTrue(String tokenHash);
+
+    // Phase 3: used by ProfileService to look up token owner by tokenKey
+    Optional<TokenEntity> findByTokenKeyAndActiveTrue(String tokenKey);
 }
