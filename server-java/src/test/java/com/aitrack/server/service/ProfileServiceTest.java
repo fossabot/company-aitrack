@@ -137,63 +137,126 @@ class ProfileServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // Test 5: classifyScenario — test path → "test"
+    // Test 5: detectLanguage — Python
     // -------------------------------------------------------------------------
 
     @Test
-    void classifyScenario_testPath_returnsTest() {
-        assertThat(profileService.classifyScenario("src/test/java/MyTest.java")).isEqualTo("test");
-        assertThat(profileService.classifyScenario("src/MyService_test.go")).isEqualTo("test");
-        assertThat(profileService.classifyScenario("lib/foo.test.ts")).isEqualTo("test");
-        assertThat(profileService.classifyScenario("src/spec/my_spec.rb")).isEqualTo("test");
+    void detectLanguage_pythonFile_returnsPython() {
+        assertThat(profileService.detectLanguage("src/main.py")).isEqualTo("Python");
     }
 
     // -------------------------------------------------------------------------
-    // Test 6: classifyScenario — ".md" file → "docs"
+    // Test 6: detectLanguage — TypeScript
     // -------------------------------------------------------------------------
 
     @Test
-    void classifyScenario_mdFile_returnsDocs() {
-        assertThat(profileService.classifyScenario("README.md")).isEqualTo("docs");
-        assertThat(profileService.classifyScenario("docs/guide.rst")).isEqualTo("docs");
-        assertThat(profileService.classifyScenario("CHANGELOG.txt")).isEqualTo("docs");
-        assertThat(profileService.classifyScenario("src/docs/api.md")).isEqualTo("docs");
+    void detectLanguage_typescriptFile_returnsTypeScript() {
+        assertThat(profileService.detectLanguage("app/index.ts")).isEqualTo("TypeScript");
+        assertThat(profileService.detectLanguage("components/Button.tsx")).isEqualTo("TypeScript");
     }
 
     // -------------------------------------------------------------------------
-    // Test 7: classifyScenario — ".yaml" file → "config"
+    // Test 7: detectLanguage — Java
     // -------------------------------------------------------------------------
 
     @Test
-    void classifyScenario_yamlFile_returnsConfig() {
-        assertThat(profileService.classifyScenario("application.yaml")).isEqualTo("config");
-        assertThat(profileService.classifyScenario("docker-compose.yml")).isEqualTo("config");
-        assertThat(profileService.classifyScenario("config/settings.toml")).isEqualTo("config");
-        assertThat(profileService.classifyScenario("pom.xml")).isEqualTo("config");
-        assertThat(profileService.classifyScenario("package.json")).isEqualTo("config");
-        assertThat(profileService.classifyScenario(".env")).isEqualTo("config");
-        assertThat(profileService.classifyScenario("src/config/main.java")).isEqualTo("config");
+    void detectLanguage_javaFile_returnsJava() {
+        assertThat(profileService.detectLanguage("src/main/java/com/example/Service.java")).isEqualTo("Java");
     }
 
     // -------------------------------------------------------------------------
-    // Test 8: classifyScenario — Java source file → "feature"
+    // Test 8: detectLanguage — Go
     // -------------------------------------------------------------------------
 
     @Test
-    void classifyScenario_javaSourceFile_returnsFeature() {
-        assertThat(profileService.classifyScenario("src/main/java/com/example/Service.java")).isEqualTo("feature");
-        assertThat(profileService.classifyScenario("src/main/kotlin/com/example/Controller.kt")).isEqualTo("feature");
+    void detectLanguage_goFile_returnsGo() {
+        assertThat(profileService.detectLanguage("cmd/server/main.go")).isEqualTo("Go");
     }
 
     // -------------------------------------------------------------------------
-    // Test 9: classifyScenario — null → "other"
+    // Test 9: detectLanguage — Rust
     // -------------------------------------------------------------------------
 
     @Test
-    void classifyScenario_null_returnsOther() {
-        assertThat(profileService.classifyScenario(null)).isEqualTo("other");
-        assertThat(profileService.classifyScenario("")).isEqualTo("other");
-        assertThat(profileService.classifyScenario("   ")).isEqualTo("other");
+    void detectLanguage_rustFile_returnsRust() {
+        assertThat(profileService.detectLanguage("src/lib.rs")).isEqualTo("Rust");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9b: detectLanguage — unknown extension → "Other"
+    // -------------------------------------------------------------------------
+
+    @Test
+    void detectLanguage_unknownExtension_returnsOther() {
+        assertThat(profileService.detectLanguage("file.unknown")).isEqualTo("Other");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9c: detectLanguage — null/blank → "Other"
+    // -------------------------------------------------------------------------
+
+    @Test
+    void detectLanguage_nullOrBlank_returnsOther() {
+        assertThat(profileService.detectLanguage(null)).isEqualTo("Other");
+        assertThat(profileService.detectLanguage("")).isEqualTo("Other");
+        assertThat(profileService.detectLanguage("   ")).isEqualTo("Other");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9d: computeCommentDensity — diff_hunk with no "+" lines → 0.0
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeCommentDensity_noAddedLines_returnsZero() {
+        EditRecordEntity r = makeRecord("tokD1", "claude", "src/A.java", 0, 2, epochNowMinus(1));
+        r.setDiffHunk("-old line\n-another old line");
+
+        double density = profileService.computeCommentDensity(List.of(r));
+
+        assertThat(density).isEqualTo(0.0);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9e: computeCommentDensity — 2 comment lines + 3 code lines → 0.4
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeCommentDensity_twoCommentThreeCode_returnsPointFour() {
+        EditRecordEntity r = makeRecord("tokD2", "claude", "src/B.java", 5, 0, epochNowMinus(1));
+        r.setDiffHunk("+// first comment\n+// second comment\n+int x = 1;\n+int y = 2;\n+return x + y;");
+
+        double density = profileService.computeCommentDensity(List.of(r));
+
+        assertThat(density).isEqualTo(0.4);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9f: computeCommentDensity — null diff_hunk → 0.0
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeCommentDensity_nullDiffHunk_returnsZero() {
+        EditRecordEntity r = makeRecord("tokD3", "claude", "src/C.py", 3, 0, epochNowMinus(1));
+        r.setDiffHunk(null);
+
+        double density = profileService.computeCommentDensity(List.of(r));
+
+        assertThat(density).isEqualTo(0.0);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9g: computeCommentDensity — "#" comments mixed with code → correct ratio
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computeCommentDensity_hashCommentsMixed_correctRatio() {
+        EditRecordEntity r = makeRecord("tokD4", "claude", "src/D.py", 4, 0, epochNowMinus(1));
+        // 1 comment (#), 3 code lines → 0.25
+        r.setDiffHunk("+# this is a comment\n+x = 1\n+y = 2\n+z = x + y");
+
+        double density = profileService.computeCommentDensity(List.of(r));
+
+        assertThat(density).isEqualTo(0.25);
     }
 
     // -------------------------------------------------------------------------
@@ -294,6 +357,65 @@ class ProfileServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 13: computePromptPatterns — "implement" keyword → generate count=1
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computePromptPatterns_generate_matches() {
+        when(editRecordRepo.findByTokenKeyAndStatusNot(eq("tokP1"), eq(RecordStatus.REJECTED)))
+                .thenReturn(List.of(makeRecordWithPrompt("tokP1", "implement new auth feature")));
+        when(tokenRepo.findByTokenKeyAndActiveTrue(eq("tokP1")))
+                .thenReturn(Optional.empty());
+
+        Optional<ProfileDto> result = profileService.computeProfile("tokP1");
+
+        assertThat(result).isPresent();
+        java.util.Map<String, Long> patterns = result.get().getPromptPatterns();
+        assertThat(patterns).isNotNull();
+        assertThat(patterns.get("generate")).isEqualTo(1L);
+        assertThat(patterns.get("fix_debug")).isEqualTo(0L);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 14: computePromptPatterns — "fix" + "bug" keywords → fix_debug count=1
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computePromptPatterns_fix_debug_matches() {
+        when(editRecordRepo.findByTokenKeyAndStatusNot(eq("tokP2"), eq(RecordStatus.REJECTED)))
+                .thenReturn(List.of(makeRecordWithPrompt("tokP2", "fix the login bug")));
+        when(tokenRepo.findByTokenKeyAndActiveTrue(eq("tokP2")))
+                .thenReturn(Optional.empty());
+
+        Optional<ProfileDto> result = profileService.computeProfile("tokP2");
+
+        assertThat(result).isPresent();
+        java.util.Map<String, Long> patterns = result.get().getPromptPatterns();
+        assertThat(patterns).isNotNull();
+        assertThat(patterns.get("fix_debug")).isEqualTo(1L);
+        assertThat(patterns.get("generate")).isEqualTo(0L);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 15: computePromptPatterns — null prompt_summary → all counts=0
+    // -------------------------------------------------------------------------
+
+    @Test
+    void computePromptPatterns_null_prompt_skipped() {
+        when(editRecordRepo.findByTokenKeyAndStatusNot(eq("tokP3"), eq(RecordStatus.REJECTED)))
+                .thenReturn(List.of(makeRecordWithPrompt("tokP3", null)));
+        when(tokenRepo.findByTokenKeyAndActiveTrue(eq("tokP3")))
+                .thenReturn(Optional.empty());
+
+        Optional<ProfileDto> result = profileService.computeProfile("tokP3");
+
+        assertThat(result).isPresent();
+        java.util.Map<String, Long> patterns = result.get().getPromptPatterns();
+        assertThat(patterns).isNotNull();
+        assertThat(patterns.values()).allMatch(v -> v == 0L);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -313,5 +435,11 @@ class ProfileServiceTest {
 
     private long epochNowMinus(int days) {
         return Instant.now().minus(days, ChronoUnit.DAYS).getEpochSecond();
+    }
+
+    private EditRecordEntity makeRecordWithPrompt(String tokenKey, String promptSummary) {
+        EditRecordEntity e = makeRecord(tokenKey, "claude", "src/Foo.java", 5, 2, epochNowMinus(1));
+        e.setPromptSummary(promptSummary);
+        return e;
     }
 }

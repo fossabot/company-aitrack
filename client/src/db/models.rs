@@ -26,6 +26,7 @@ pub struct Record {
     pub device_id: String,
     pub hostname: String,
     pub record_sig: String,
+    pub prompt_summary: Option<String>,
 }
 
 /// A lightweight row returned by the `inspect` command.

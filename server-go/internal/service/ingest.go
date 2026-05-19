@@ -84,6 +84,9 @@ func (s *IngestService) saveEdit(token *model.Token, edit *model.EditDTO, status
 	if edit.Metadata != nil {
 		rec.Metadata = *edit.Metadata
 	}
+	if edit.PromptSummary != nil {
+		rec.PromptSummary = edit.PromptSummary
+	}
 	if len(flags) > 0 {
 		rec.Flags = strings.Join(flags, ",")
 	}

@@ -25,6 +25,8 @@ pub enum Command {
     Clean(CleanArgs),
     /// Send a heartbeat to the server (forced, ignores throttle)
     Heartbeat,
+    /// Hook callback: reads stdin JSON and records a user prompt
+    PromptCapture(PromptCaptureArgs),
 }
 
 #[derive(Args)]
@@ -79,4 +81,10 @@ pub struct CleanArgs {
     pub all: bool,
     #[arg(long)]
     pub force: bool,
+}
+
+#[derive(Args)]
+pub struct PromptCaptureArgs {
+    #[arg(short, long, default_value = "claude")]
+    pub tool: String,
 }

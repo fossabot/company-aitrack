@@ -40,6 +40,8 @@ struct EditRecord {
     device_id: String,
     hostname: String,
     record_sig: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompt_summary: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -108,6 +110,7 @@ pub async fn flush_unsynced(conn: &Connection, api_url: &str, credential: &str) 
             device_id: r.device_id.clone(),
             hostname: r.hostname.clone(),
             record_sig: r.record_sig.clone(),
+            prompt_summary: r.prompt_summary.clone(),
         })
         .collect();
 
@@ -219,7 +222,8 @@ mod tests {
       token_key TEXT NOT NULL DEFAULT '',
       device_id TEXT NOT NULL DEFAULT '',
       hostname TEXT NOT NULL DEFAULT '',
-      record_sig TEXT NOT NULL DEFAULT ''
+      record_sig TEXT NOT NULL DEFAULT '',
+      prompt_summary TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_synced ON records(synced);
     ";

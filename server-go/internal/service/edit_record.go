@@ -23,13 +23,14 @@ func (r *EditRecordRepository) Save(rec *model.EditRecord) error {
 		INSERT INTO edit_records
 		  (token_key, device_id, hostname, tool, tool_version, provider, model, session_id,
 		   repo_url, branch, current_sha, file_path, added_lines, removed_lines,
-		   diff_hunk, metadata, timestamp, record_sig, status, flags, received_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		   diff_hunk, metadata, timestamp, record_sig, status, flags, received_at, prompt_summary)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		rec.TokenKey, rec.DeviceID, rec.Hostname, rec.Tool, rec.ToolVersion, rec.Provider, rec.Model,
 		rec.SessionID, rec.RepoURL, rec.Branch, rec.CurrentSHA, rec.FilePath,
 		rec.AddedLines, rec.RemovedLines, rec.DiffHunk, rec.Metadata, rec.Timestamp,
 		rec.RecordSig, rec.Status, rec.Flags,
 		rec.ReceivedAt.UTC().Format(time.RFC3339),
+		rec.PromptSummary,
 	)
 	return err
 }
@@ -72,7 +73,7 @@ func (r *EditRecordRepository) Query(tokenKey, repoURL string, page, size int) (
 	rows, err := r.db.Query(
 		`SELECT id, token_key, device_id, hostname, tool, tool_version, provider, model, session_id,
 		        repo_url, branch, current_sha, file_path, added_lines, removed_lines,
-		        diff_hunk, metadata, timestamp, record_sig, status, flags, received_at
+		        diff_hunk, metadata, timestamp, record_sig, status, flags, received_at, prompt_summary
 		 FROM edit_records `+where+` ORDER BY received_at DESC LIMIT ? OFFSET ?`,
 		queryArgs...,
 	)
@@ -90,7 +91,7 @@ func (r *EditRecordRepository) Query(tokenKey, repoURL string, page, size int) (
 			&rec.Provider, &rec.Model, &rec.SessionID, &rec.RepoURL, &rec.Branch,
 			&rec.CurrentSHA, &rec.FilePath, &rec.AddedLines, &rec.RemovedLines,
 			&rec.DiffHunk, &rec.Metadata, &rec.Timestamp, &rec.RecordSig,
-			&rec.Status, &rec.Flags, &receivedAt,
+			&rec.Status, &rec.Flags, &receivedAt, &rec.PromptSummary,
 		); err != nil {
 			return nil, 0, err
 		}

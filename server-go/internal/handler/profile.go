@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,14 +56,17 @@ func (h *ProfileHandler) Profile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profile)
 }
 
-// rawRecord holds the columns we need from edit_records.
-type rawRecord struct {
-	Tool         string
-	FilePath     string
-	AddedLines   int64
-	RemovedLines int64
-	Timestamp    string // Unix epoch as text
-	Status       string
+// RawRecord holds the columns we need from edit_records.
+// Exported so tests can construct values for ComputeCommentDensity and ComputePromptPatterns.
+type RawRecord struct {
+	Tool          string
+	FilePath      string
+	AddedLines    int64
+	RemovedLines  int64
+	DiffHunk      string
+	Timestamp     string // Unix epoch as text
+	Status        string
+	PromptSummary *string
 }
 
 func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*model.ProfileDto, error) {
@@ -82,7 +86,7 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 
 	// Query all non-REJECTED records for this token.
 	rows, err := h.db.QueryContext(ctx,
-		`SELECT tool, file_path, added_lines, removed_lines, timestamp, status
+		`SELECT tool, file_path, added_lines, removed_lines, diff_hunk, timestamp, status, prompt_summary
 		 FROM edit_records
 		 WHERE token_key = ? AND status != 'REJECTED'`,
 		tokenKey,
@@ -92,10 +96,10 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 	}
 	defer rows.Close()
 
-	var records []rawRecord
+	var records []RawRecord
 	for rows.Next() {
-		var rec rawRecord
-		if err := rows.Scan(&rec.Tool, &rec.FilePath, &rec.AddedLines, &rec.RemovedLines, &rec.Timestamp, &rec.Status); err != nil {
+		var rec RawRecord
+		if err := rows.Scan(&rec.Tool, &rec.FilePath, &rec.AddedLines, &rec.RemovedLines, &rec.DiffHunk, &rec.Timestamp, &rec.Status, &rec.PromptSummary); err != nil {
 			return nil, err
 		}
 		records = append(records, rec)
@@ -112,7 +116,7 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 		TokenKey:    tokenKey,
 		Owner:       owner,
 		GeneratedAt: generatedAt,
-		Scenarios:   make(map[string]int64),
+		Languages:   make(map[string]int64),
 		Tools:       make(map[string]int64),
 	}
 
@@ -126,6 +130,7 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 		depth := &model.DepthStats{}
 		dto.Frequency = freq
 		dto.Depth = depth
+		dto.PromptPatterns = ComputePromptPatterns(records)
 		return dto, nil
 	}
 
@@ -156,9 +161,9 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 		// Tool counts.
 		dto.Tools[rec.Tool]++
 
-		// Scenario classification.
-		scenario := ClassifyScenario(rec.FilePath)
-		dto.Scenarios[scenario]++
+		// Language detection.
+		lang := DetectLanguage(rec.FilePath)
+		dto.Languages[lang]++
 
 		// Timestamp-based calculations.
 		epochTs, parseErr := strconv.ParseInt(rec.Timestamp, 10, 64)
@@ -229,60 +234,151 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 	p90 := lineTotals[int(float64(n)*0.9)]
 
 	dto.Depth = &model.DepthStats{
-		AvgLines:    avgLines,
-		P50Lines:    p50,
-		P90Lines:    p90,
-		SmallCount:  smallCount,
-		MediumCount: mediumCount,
-		LargeCount:  largeCount,
+		AvgLines:       avgLines,
+		P50Lines:       p50,
+		P90Lines:       p90,
+		SmallCount:     smallCount,
+		MediumCount:    mediumCount,
+		LargeCount:     largeCount,
+		CommentDensity: ComputeCommentDensity(records),
 	}
+
+	dto.PromptPatterns = ComputePromptPatterns(records)
 
 	return dto, nil
 }
 
-// ClassifyScenario classifies a file path into a scenario category.
+// ComputePromptPatterns classifies prompt_summary text into intent categories.
+func ComputePromptPatterns(records []RawRecord) map[string]int64 {
+	patterns := map[string]int64{
+		"generate":  0,
+		"fix_debug": 0,
+		"refactor":  0,
+		"explain":   0,
+		"test":      0,
+		"other":     0,
+	}
+	for _, r := range records {
+		if r.PromptSummary == nil || *r.PromptSummary == "" {
+			continue
+		}
+		lower := strings.ToLower(*r.PromptSummary)
+		switch {
+		case matchesAny(lower, "generate", "create", "write", "implement", "add"):
+			patterns["generate"]++
+		case matchesAny(lower, "fix", "debug", "error", "bug", "broken", "failing"):
+			patterns["fix_debug"]++
+		case matchesAny(lower, "refactor", "clean", "improve", "reorganize", "rename"):
+			patterns["refactor"]++
+		case matchesAny(lower, "explain", "what", "how", "why", "understand", "describe"):
+			patterns["explain"]++
+		case matchesAny(lower, "test", "spec", "mock", "assert", "verify"):
+			patterns["test"]++
+		default:
+			patterns["other"]++
+		}
+	}
+	return patterns
+}
+
+func matchesAny(s string, keywords ...string) bool {
+	for _, kw := range keywords {
+		if strings.Contains(s, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// DetectLanguage maps a file path to a language name based on its extension.
 // Exported for testing.
-func ClassifyScenario(filePath string) string {
-	if strings.TrimSpace(filePath) == "" {
-		return "other"
+func DetectLanguage(filePath string) string {
+	if filePath == "" {
+		return "Other"
 	}
-	lp := strings.ToLower(filePath)
-
-	// Test files.
-	if strings.Contains(lp, "/test") ||
-		strings.HasPrefix(lp, "test") ||
-		strings.Contains(lp, "_test.") ||
-		strings.Contains(lp, ".test.") ||
-		strings.Contains(lp, "/spec") ||
-		strings.HasPrefix(lp, "spec") ||
-		strings.Contains(lp, "_spec.") ||
-		strings.Contains(lp, ".spec.") {
-		return "test"
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".py":
+		return "Python"
+	case ".ts", ".tsx":
+		return "TypeScript"
+	case ".js", ".jsx":
+		return "JavaScript"
+	case ".java":
+		return "Java"
+	case ".go":
+		return "Go"
+	case ".rs":
+		return "Rust"
+	case ".cpp", ".cc", ".cxx", ".c":
+		return "C/C++"
+	case ".cs":
+		return "C#"
+	case ".rb":
+		return "Ruby"
+	case ".php":
+		return "PHP"
+	case ".swift":
+		return "Swift"
+	case ".kt", ".kts":
+		return "Kotlin"
+	case ".scala":
+		return "Scala"
+	case ".vue":
+		return "Vue"
+	case ".html", ".htm":
+		return "HTML"
+	case ".css", ".scss", ".sass", ".less":
+		return "CSS"
+	case ".sql":
+		return "SQL"
+	case ".sh", ".bash", ".zsh":
+		return "Shell"
+	case ".yaml", ".yml":
+		return "YAML"
+	case ".json":
+		return "JSON"
+	case ".xml":
+		return "XML"
+	case ".md", ".rst", ".txt":
+		return "Docs"
+	default:
+		return "Other"
 	}
+}
 
-	// Docs files.
-	if strings.HasSuffix(lp, ".md") ||
-		strings.HasSuffix(lp, ".rst") ||
-		strings.HasSuffix(lp, ".txt") ||
-		strings.Contains(lp, "/docs/") ||
-		strings.Contains(lp, "/doc/") {
-		return "docs"
+// ComputeCommentDensity calculates the ratio of comment lines to total added lines
+// across all records' diff hunks.
+func ComputeCommentDensity(records []RawRecord) float64 {
+	var totalAdded, commentLines int64
+	for _, r := range records {
+		if r.DiffHunk == "" {
+			continue
+		}
+		for _, line := range strings.Split(r.DiffHunk, "\n") {
+			if !strings.HasPrefix(line, "+") || strings.HasPrefix(line, "+++") {
+				continue
+			}
+			totalAdded++
+			trimmed := strings.TrimSpace(line[1:]) // strip leading +
+			if strings.HasPrefix(trimmed, "//") ||
+				strings.HasPrefix(trimmed, "#") ||
+				strings.HasPrefix(trimmed, "/*") ||
+				strings.HasPrefix(trimmed, "* ") ||
+				strings.HasPrefix(trimmed, "*/") ||
+				strings.HasPrefix(trimmed, "/**") ||
+				strings.HasPrefix(trimmed, `"""`) ||
+				strings.HasPrefix(trimmed, `'''`) ||
+				strings.HasPrefix(trimmed, "--") ||
+				strings.HasPrefix(trimmed, "<!--") {
+				commentLines++
+			}
+		}
 	}
-
-	// Config files.
-	if strings.HasSuffix(lp, ".yaml") ||
-		strings.HasSuffix(lp, ".yml") ||
-		strings.HasSuffix(lp, ".toml") ||
-		strings.HasSuffix(lp, ".json") ||
-		strings.HasSuffix(lp, ".xml") ||
-		strings.HasSuffix(lp, ".ini") ||
-		strings.HasSuffix(lp, ".env") ||
-		strings.HasSuffix(lp, ".properties") ||
-		strings.Contains(lp, "/config/") {
-		return "config"
+	if totalAdded == 0 {
+		return 0.0
 	}
-
-	return "feature"
+	return float64(commentLines) / float64(totalAdded)
 }
 
 // percentile returns the value at the given percentile (0.0–1.0) of a sorted slice.

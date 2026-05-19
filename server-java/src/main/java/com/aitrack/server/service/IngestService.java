@@ -100,6 +100,7 @@ public class IngestService {
         entity.setMetadata(edit.getMetadata());
         entity.setTimestamp(edit.getTimestamp());
         entity.setRecordSig(edit.getRecordSig());
+        entity.setPromptSummary(edit.getPromptSummary());
         entity.setStatus(status);
         entity.setFlags(flags.isEmpty() ? null : String.join(",", flags));
         entity.setReceivedAt(Instant.now());

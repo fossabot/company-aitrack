@@ -24,4 +24,5 @@ public class EditDto {
     @NotBlank @JsonProperty("device_id") private String deviceId;
     @NotBlank private String hostname;
     @NotBlank @JsonProperty("record_sig") private String recordSig;
+    @JsonProperty("prompt_summary") private String promptSummary;
 }

@@ -21,8 +21,9 @@ pub fn insert_record(conn: &Connection, r: &Record) -> Result<bool> {
     conn.execute(
         "INSERT INTO records (tool, tool_version, provider, model, session_id,
             repo_url, branch, current_sha, file_path, added_lines, removed_lines,
-            diff_hunk, metadata, synced, timestamp, token_key, device_id, hostname, record_sig)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,0,?14,?15,?16,?17,?18)",
+            diff_hunk, metadata, synced, timestamp, token_key, device_id, hostname, record_sig,
+            prompt_summary)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,0,?14,?15,?16,?17,?18,?19)",
         params![
             r.tool,
             r.tool_version,
@@ -42,6 +43,7 @@ pub fn insert_record(conn: &Connection, r: &Record) -> Result<bool> {
             r.device_id,
             r.hostname,
             r.record_sig,
+            r.prompt_summary.clone(),
         ],
     )
     .context("insert record")?;
@@ -53,7 +55,8 @@ pub fn fetch_unsynced(conn: &Connection, token_key: &str, limit: i64) -> Result<
         "SELECT id, tool, tool_version, provider, model, session_id,
                 repo_url, branch, current_sha, file_path, added_lines,
                 removed_lines, diff_hunk, metadata, synced, synced_at,
-                retry_count, timestamp, token_key, device_id, hostname, record_sig
+                retry_count, timestamp, token_key, device_id, hostname, record_sig,
+                prompt_summary
          FROM records
          WHERE synced = 0 AND repo_url != '' AND token_key = ?1
            AND retry_count < 5
@@ -217,7 +220,31 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Record> {
         device_id: row.get(19)?,
         hostname: row.get(20)?,
         record_sig: row.get(21)?,
+        prompt_summary: row.get(22)?,
     })
+}
+
+pub fn ensure_prompt_context_table(conn: &Connection) -> Result<()> {
+    conn.execute_batch(super::schema::CREATE_PROMPT_CONTEXT_TABLE_SQL)?;
+    Ok(())
+}
+
+pub fn insert_prompt_context(conn: &Connection, session_id: &str, prompt_text: &str) -> Result<()> {
+    // Truncate to 512 chars to keep storage bounded
+    let truncated: String = prompt_text.chars().take(512).collect();
+    conn.execute(
+        "INSERT INTO prompt_context (session_id, prompt_text) VALUES (?1, ?2)",
+        params![session_id, truncated],
+    )?;
+    Ok(())
+}
+
+pub fn get_recent_prompt(conn: &Connection, session_id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT prompt_text FROM prompt_context WHERE session_id = ?1 ORDER BY created_at DESC LIMIT 1",
+        params![session_id],
+        |row| row.get(0),
+    ).ok()
 }
 
 fn map_inspect_row(row: &rusqlite::Row) -> rusqlite::Result<InspectRow> {

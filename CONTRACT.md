@@ -38,6 +38,7 @@ The client stores only `credential` (never the two parts separately). Internally
 aitrack init    [--claude] [--codex] [--cursor] [--api-url URL] [--credential CRED]
 aitrack remove  [--claude] [--codex] [--cursor]
 aitrack capture --tool <claude|codex|cursor>   (default: claude)  [--api-url URL] [--credential CRED]
+aitrack prompt-capture --tool <claude>   (reads UserPromptSubmit stdin, stores prompt)
 aitrack inspect [--limit N]  (default 20, max 200)  [--pending] [--current-token]
 aitrack stats
 aitrack status
@@ -83,7 +84,8 @@ CREATE TABLE IF NOT EXISTS records (
   token_key TEXT NOT NULL DEFAULT '',
   device_id TEXT NOT NULL DEFAULT '',
   hostname TEXT NOT NULL DEFAULT '',
-  record_sig TEXT NOT NULL DEFAULT ''
+  record_sig TEXT NOT NULL DEFAULT '',
+  prompt_summary TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_synced ON records(synced);
 ```
@@ -166,13 +168,14 @@ Headers:
       "timestamp": "2026-05-17T10:21:00Z",
       "device_id": "<uuid>",
       "hostname": "MacBook-Pro.local",
-      "record_sig": "<hex>"
+      "record_sig": "<hex>",
+      "prompt_summary": "fix the auth middleware to handle token expiry"
     }
   ]
 }
 ```
 
-**Note:** Edit objects contain 17 fields. `token_key` is NOT included (local SQL filter only).
+**Note:** Edit objects contain 17 required fields + 1 optional field (`prompt_summary`). `token_key` is NOT included (local SQL filter only).
 `hostname` is the OS hostname of the reporting machine, captured client-side at capture time.
 
 ---
@@ -240,6 +243,20 @@ Throttle: sent at end of each `capture`, only if >1h since last heartbeat (track
     ]
   }
 }
+```
+
+```json
+"UserPromptSubmit": [
+  {
+    "hooks": [
+      {
+        "type": "command",
+        "command": "<abs aitrack path> prompt-capture --tool claude",
+        "timeout": 10
+      }
+    ]
+  }
+]
 ```
 
 ### Codex CLI (`~/.codex/config.toml`)
@@ -447,13 +464,17 @@ Find edit records semantically similar to a given embedding vector using pgvecto
     "p90_lines": 142,
     "small_count": 89,
     "medium_count": 112,
-    "large_count": 46
+    "large_count": 46,
+    "comment_density": 0.12
   },
-  "scenarios": {"test": 43, "docs": 12, "config": 8, "feature": 148, "other": 36},
-  "tools": {"claude": 210, "codex": 28, "cursor": 9}
+  "languages": {"Go": 148, "TypeScript": 43, "Python": 28, "Java": 20, "Other": 8},
+  "tools": {"claude": 210, "codex": 28, "cursor": 9},
+  "prompt_patterns": {"generate": 148, "fix_debug": 43, "refactor": 12, "explain": 8, "test": 20, "other": 16}
 }
 ```
 
 **Errors**: 403 (invalid admin key), 404 (no records for token_key)
 
 **Computation**: Includes ACCEPTED + FLAGGED records, excludes REJECTED. Computed on-demand (Phase 4 will add caching).
+
+**`prompt_patterns`**: Categorized from `prompt_summary` text using keyword matching. Only counts records that have non-null `prompt_summary`. Categories: `generate` (generate/create/write/implement/add), `fix_debug` (fix/debug/error/bug/broken/failing), `refactor` (refactor/clean/improve/reorganize/rename), `explain` (explain/what/how/why/understand/describe), `test` (test/spec/mock/assert/verify), `other` (remainder).

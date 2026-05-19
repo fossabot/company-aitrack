@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS records (
   device_id TEXT NOT NULL DEFAULT '',
   hostname TEXT NOT NULL DEFAULT '',
   record_sig TEXT NOT NULL DEFAULT '',
-  embedding BLOB
+  embedding BLOB,
+  prompt_summary TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_synced ON records(synced);
 ";
@@ -34,8 +35,19 @@ pub const MIGRATIONS: &[&str] = &[
     "ALTER TABLE records ADD COLUMN hostname TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE records ADD COLUMN record_sig TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE records ADD COLUMN embedding BLOB",
+    "ALTER TABLE records ADD COLUMN prompt_summary TEXT",
 ];
 
 /// DDL for the key-value store table.
 pub const CREATE_KV_TABLE_SQL: &str =
     "CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value INTEGER NOT NULL);";
+
+/// DDL for the prompt context table.
+pub const CREATE_PROMPT_CONTEXT_TABLE_SQL: &str = "
+CREATE TABLE IF NOT EXISTS prompt_context (
+  session_id TEXT NOT NULL,
+  prompt_text TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pc_sess ON prompt_context(session_id, created_at);
+";

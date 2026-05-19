@@ -46,6 +46,7 @@ pub struct EditRecordFactory {
     pub device_id: Option<String>,
     pub hostname: Option<String>,
     pub record_sig: Option<String>,
+    pub prompt_summary: Option<Option<String>>,
 }
 
 impl EditRecordFactory {
@@ -69,6 +70,7 @@ impl EditRecordFactory {
             device_id: None,
             hostname: None,
             record_sig: None,
+            prompt_summary: None,
         }
     }
 
@@ -87,6 +89,7 @@ impl EditRecordFactory {
     pub fn with_branch(mut self, v: &str) -> Self { self.branch = Some(v.to_string()); self }
     pub fn with_current_sha(mut self, v: &str) -> Self { self.current_sha = Some(v.to_string()); self }
     pub fn with_session_id(mut self, v: &str) -> Self { self.session_id = Some(v.to_string()); self }
+    pub fn with_prompt_summary(mut self, v: Option<String>) -> Self { self.prompt_summary = Some(v); self }
 
     pub fn build(self) -> Record {
         let s = self.seed;
@@ -115,6 +118,7 @@ impl EditRecordFactory {
             device_id: self.device_id.unwrap_or_else(|| seed_uuid(s.wrapping_add(1))),
             hostname: self.hostname.unwrap_or_else(|| format!("host-{s:016x}")),
             record_sig: self.record_sig.unwrap_or_else(|| seed_str(s, "sig")),
+            prompt_summary: self.prompt_summary.unwrap_or(None),
         }
     }
 }

@@ -24,6 +24,8 @@
         <mockito.version>5.18.0</mockito.version>
         <!-- Force Byte Buddy 1.17.5 so Mockito inline mocks work on Java 25 -->
         <byte-buddy.version>1.17.5</byte-buddy.version>
+        <!-- Lombok version override: 1.18.40 for Java 25 compatibility -->
+        <lombok.version>1.18.40</lombok.version>
     </properties>
 
     <dependencies>
@@ -68,6 +70,22 @@
 
     <build>
         <plugins>
+            <!-- Explicit Lombok processorpath so Lombok annotation processing
+                 works correctly on JDK 25 (service-file auto-discovery fails). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

@@ -35,8 +35,11 @@ public class ProfileDto {
 
     private FrequencyStats frequency;
     private DepthStats depth;
-    private Map<String, Long> scenarios;
+    private Map<String, Long> languages;
     private Map<String, Long> tools;
+
+    @JsonProperty("prompt_patterns")
+    private Map<String, Long> promptPatterns;
 
     @Data
     @NoArgsConstructor
@@ -82,5 +85,8 @@ public class ProfileDto {
 
         @JsonProperty("large_count")
         private long largeCount;    // total > 100
+
+        @JsonProperty("comment_density")
+        private double commentDensity;  // ratio: comment lines added / total lines added, 0.0–1.0
     }
 }

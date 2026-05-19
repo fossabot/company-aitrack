@@ -32,10 +32,11 @@ type EditRecord struct {
 	DiffHunk     string    `json:"diff_hunk"`
 	Metadata     string    `json:"metadata"`
 	Timestamp    string    `json:"timestamp"`
-	RecordSig    string    `json:"record_sig"`
-	Status       string    `json:"status"` // ACCEPTED, FLAGGED, REJECTED
-	Flags        string    `json:"flags"`  // comma-separated
-	ReceivedAt   time.Time `json:"received_at"`
+	RecordSig     string    `json:"record_sig"`
+	PromptSummary *string   `json:"prompt_summary,omitempty"`
+	Status        string    `json:"status"` // ACCEPTED, FLAGGED, REJECTED
+	Flags         string    `json:"flags"`  // comma-separated
+	ReceivedAt    time.Time `json:"received_at"`
 }
 
 type Device struct {
@@ -78,7 +79,8 @@ type EditDTO struct {
 	Timestamp    string  `json:"timestamp"`
 	DeviceID     string  `json:"device_id"`
 	Hostname     string  `json:"hostname"`
-	RecordSig    string  `json:"record_sig"`
+	RecordSig     string  `json:"record_sig"`
+	PromptSummary *string `json:"prompt_summary,omitempty"`
 }
 
 type EditBatchRequest struct {
@@ -154,8 +156,9 @@ type ProfileDto struct {
 	GeneratedAt       string           `json:"generated_at"` // ISO-8601 UTC
 	Frequency         *FrequencyStats  `json:"frequency"`
 	Depth             *DepthStats      `json:"depth"`
-	Scenarios         map[string]int64 `json:"scenarios"`
+	Languages         map[string]int64 `json:"languages"`
 	Tools             map[string]int64 `json:"tools"`
+	PromptPatterns    map[string]int64 `json:"prompt_patterns"`
 }
 
 type FrequencyStats struct {
@@ -170,10 +173,11 @@ type DayCount struct {
 }
 
 type DepthStats struct {
-	AvgLines    float64 `json:"avg_lines"`
-	P50Lines    int64   `json:"p50_lines"`
-	P90Lines    int64   `json:"p90_lines"`
-	SmallCount  int64   `json:"small_count"`  // total < 10
-	MediumCount int64   `json:"medium_count"` // 10 <= total <= 100
-	LargeCount  int64   `json:"large_count"`  // total > 100
+	AvgLines       float64 `json:"avg_lines"`
+	P50Lines       int64   `json:"p50_lines"`
+	P90Lines       int64   `json:"p90_lines"`
+	SmallCount     int64   `json:"small_count"`      // total < 10
+	MediumCount    int64   `json:"medium_count"`     // 10 <= total <= 100
+	LargeCount     int64   `json:"large_count"`      // total > 100
+	CommentDensity float64 `json:"comment_density"`
 }

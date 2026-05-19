@@ -53,6 +53,7 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         device_id: String::new(),
         hostname: String::new(),
         record_sig: String::new(),
+        prompt_summary: None,
     })
 }
 

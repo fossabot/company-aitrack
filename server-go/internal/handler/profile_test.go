@@ -157,21 +157,18 @@ func TestProfile_WithEdits(t *testing.T) {
 	if resp.Owner != "dev-owner" {
 		t.Errorf("owner = %q, want %q", resp.Owner, "dev-owner")
 	}
-	if resp.Scenarios == nil {
-		t.Fatal("scenarios map should not be nil")
+	if resp.Languages == nil {
+		t.Fatal("languages map should not be nil")
 	}
 	if resp.Tools == nil {
 		t.Fatal("tools map should not be nil")
 	}
-	// Two records have "test" or "docs" file paths.
-	if _, ok := resp.Scenarios["test"]; !ok {
-		t.Errorf("expected 'test' scenario, got: %v", resp.Scenarios)
+	// src/main.go → Go, src/main_test.go → Go, docs/README.md → Docs.
+	if resp.Languages["Go"] != 2 {
+		t.Errorf("languages[Go] = %d, want 2", resp.Languages["Go"])
 	}
-	if _, ok := resp.Scenarios["docs"]; !ok {
-		t.Errorf("expected 'docs' scenario, got: %v", resp.Scenarios)
-	}
-	if _, ok := resp.Scenarios["feature"]; !ok {
-		t.Errorf("expected 'feature' scenario, got: %v", resp.Scenarios)
+	if resp.Languages["Docs"] != 1 {
+		t.Errorf("languages[Docs] = %d, want 1", resp.Languages["Docs"])
 	}
 	// Two different tools: cursor (x2) and copilot (x1).
 	if resp.Tools["cursor"] != 2 {
@@ -259,64 +256,196 @@ func TestProfile_JSONShape(t *testing.T) {
 	requiredKeys := []string{
 		"token_key", "owner", "total_edits", "total_added_lines",
 		"total_removed_lines", "generated_at", "frequency", "depth",
-		"scenarios", "tools",
+		"languages", "tools", "prompt_patterns",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := raw[k]; !ok {
 			t.Errorf("missing key %q in response", k)
 		}
 	}
+
+	// Verify depth sub-struct contains comment_density.
+	var depth map[string]json.RawMessage
+	if err := json.Unmarshal(raw["depth"], &depth); err != nil {
+		t.Fatalf("unmarshal depth: %v", err)
+	}
+	if _, ok := depth["comment_density"]; !ok {
+		t.Error("missing key \"comment_density\" in depth object")
+	}
 }
 
-// ─── classifyScenario unit tests ───────────────────────────────────────────
+// ─── detectLanguage unit tests ─────────────────────────────────────────────
 
-func TestClassifyScenario(t *testing.T) {
+func TestDetectLanguage(t *testing.T) {
 	cases := []struct {
 		path string
 		want string
 	}{
-		// empty / blank
-		{"", "other"},
-		{"   ", "other"},
+		// empty path
+		{"", "Other"},
 
-		// test files
-		{"src/main_test.go", "test"},
-		{"src/main.test.ts", "test"},
-		{"src/main.spec.ts", "test"},
-		{"tests/foo.go", "test"},
-		{"spec/bar.rb", "test"},
-		{"src/foo_spec.rb", "test"},
+		// known extensions
+		{"src/app.py", "Python"},
+		{"src/app.ts", "TypeScript"},
+		{"src/app.tsx", "TypeScript"},
+		{"src/app.js", "JavaScript"},
+		{"src/app.jsx", "JavaScript"},
+		{"src/Main.java", "Java"},
+		{"internal/handler/profile.go", "Go"},
+		{"src/lib.rs", "Rust"},
+		{"src/main.cpp", "C/C++"},
+		{"src/util.cc", "C/C++"},
+		{"src/util.c", "C/C++"},
+		{"src/App.cs", "C#"},
+		{"lib/helper.rb", "Ruby"},
+		{"src/index.php", "PHP"},
+		{"App.swift", "Swift"},
+		{"app/Main.kt", "Kotlin"},
+		{"build.kts", "Kotlin"},
+		{"src/Main.scala", "Scala"},
+		{"components/App.vue", "Vue"},
+		{"index.html", "HTML"},
+		{"index.htm", "HTML"},
+		{"styles/main.css", "CSS"},
+		{"styles/main.scss", "CSS"},
+		{"styles/main.sass", "CSS"},
+		{"styles/main.less", "CSS"},
+		{"schema.sql", "SQL"},
+		{"deploy.sh", "Shell"},
+		{"deploy.bash", "Shell"},
+		{"deploy.zsh", "Shell"},
+		{"config.yaml", "YAML"},
+		{"config.yml", "YAML"},
+		{"package.json", "JSON"},
+		{"pom.xml", "XML"},
+		{"README.md", "Docs"},
+		{"API.rst", "Docs"},
+		{"CHANGELOG.txt", "Docs"},
 
-		// docs files
-		{"README.md", "docs"},
-		{"docs/guide.md", "docs"},
-		{"doc/api.rst", "docs"},
-		{"CHANGELOG.txt", "docs"},
-		{"src/docs/overview.md", "docs"},
-
-		// config files
-		{"config.yaml", "config"},
-		{"docker-compose.yml", "config"},
-		{"Cargo.toml", "config"},
-		{"package.json", "config"},
-		{"pom.xml", "config"},
-		{".env", "config"},
-		{"app.ini", "config"},
-		{"app.properties", "config"},
-		{"src/config/settings.go", "config"},
-
-		// feature (default)
-		{"src/main.go", "feature"},
-		{"lib/util.ts", "feature"},
-		{"internal/service/foo.go", "feature"},
+		// unknown extension
+		{"src/file.xyz", "Other"},
+		{"Makefile", "Other"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			got := handler.ClassifyScenario(tc.path)
+			got := handler.DetectLanguage(tc.path)
 			if got != tc.want {
-				t.Errorf("classifyScenario(%q) = %q, want %q", tc.path, got, tc.want)
+				t.Errorf("detectLanguage(%q) = %q, want %q", tc.path, got, tc.want)
 			}
 		})
 	}
+}
+
+// ─── ComputePromptPatterns unit tests ─────────────────────────────────────
+
+func TestComputePromptPatterns(t *testing.T) {
+	t.Run("generate keyword matches", func(t *testing.T) {
+		ps := "implement new auth feature"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["generate"] != 1 {
+			t.Errorf("generate = %d, want 1", patterns["generate"])
+		}
+		if patterns["fix_debug"] != 0 {
+			t.Errorf("fix_debug = %d, want 0", patterns["fix_debug"])
+		}
+	})
+
+	t.Run("fix_debug keyword matches", func(t *testing.T) {
+		ps := "fix the login bug"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["fix_debug"] != 1 {
+			t.Errorf("fix_debug = %d, want 1", patterns["fix_debug"])
+		}
+		if patterns["generate"] != 0 {
+			t.Errorf("generate = %d, want 0", patterns["generate"])
+		}
+	})
+
+	t.Run("nil prompt_summary is skipped", func(t *testing.T) {
+		records := []handler.RawRecord{{PromptSummary: nil}}
+		patterns := handler.ComputePromptPatterns(records)
+		for k, v := range patterns {
+			if v != 0 {
+				t.Errorf("patterns[%q] = %d, want 0", k, v)
+			}
+		}
+	})
+
+	t.Run("other category when no keyword matches", func(t *testing.T) {
+		ps := "do something vague"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["other"] != 1 {
+			t.Errorf("other = %d, want 1", patterns["other"])
+		}
+	})
+}
+
+// ─── computeCommentDensity unit tests ──────────────────────────────────────
+
+func TestComputeCommentDensity(t *testing.T) {
+	t.Run("empty records returns 0.0", func(t *testing.T) {
+		got := handler.ComputeCommentDensity(nil)
+		if got != 0.0 {
+			t.Errorf("got %v, want 0.0", got)
+		}
+	})
+
+	t.Run("empty diffHunk is skipped", func(t *testing.T) {
+		got := handler.ComputeCommentDensity([]handler.RawRecord{
+			{DiffHunk: ""},
+			{DiffHunk: ""},
+		})
+		if got != 0.0 {
+			t.Errorf("got %v, want 0.0", got)
+		}
+	})
+
+	t.Run("one comment line one code line gives 0.5", func(t *testing.T) {
+		// +// this is a comment  → comment
+		// +someCode()             → code
+		diff := "+// this is a comment\n+someCode()"
+		got := handler.ComputeCommentDensity([]handler.RawRecord{
+			{DiffHunk: diff},
+		})
+		const want = 0.5
+		if got != want {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("only code lines gives 0.0", func(t *testing.T) {
+		diff := "+foo()\n+bar()\n+baz()"
+		got := handler.ComputeCommentDensity([]handler.RawRecord{
+			{DiffHunk: diff},
+		})
+		if got != 0.0 {
+			t.Errorf("got %v, want 0.0", got)
+		}
+	})
+
+	t.Run("only comment lines gives 1.0", func(t *testing.T) {
+		diff := "+// line1\n+# line2\n+/* line3 */"
+		got := handler.ComputeCommentDensity([]handler.RawRecord{
+			{DiffHunk: diff},
+		})
+		if got != 1.0 {
+			t.Errorf("got %v, want 1.0", got)
+		}
+	})
+
+	t.Run("removal lines and +++ header are ignored", func(t *testing.T) {
+		// +++ header must not count; - lines must not count
+		diff := "+++ b/file.go\n-removed line\n+// comment\n+code"
+		got := handler.ComputeCommentDensity([]handler.RawRecord{
+			{DiffHunk: diff},
+		})
+		const want = 0.5
+		if got != want {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
 }

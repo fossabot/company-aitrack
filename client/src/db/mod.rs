@@ -17,9 +17,10 @@ use crate::config::db_path;
 // ---------------------------------------------------------------------------
 pub use models::{InspectRow, Record};
 pub use queries::{
-    clean_all, clean_synced, ensure_kv_table, fetch_unsynced, get_last_heartbeat, increment_retry,
-    insert_record, inspect_records, mark_synced, pending_count, pending_count_all,
-    set_last_heartbeat, token_breakdown,
+    clean_all, clean_synced, ensure_kv_table, ensure_prompt_context_table, fetch_unsynced,
+    get_last_heartbeat, get_recent_prompt, increment_retry, insert_prompt_context, insert_record,
+    inspect_records, mark_synced, pending_count, pending_count_all, set_last_heartbeat,
+    token_breakdown,
 };
 
 /// Open (or create) the records database and run all pending migrations.
@@ -64,6 +65,9 @@ pub fn open_db() -> Result<Connection> {
     // Ensure the kv table exists (used by heartbeat throttling).
     queries::ensure_kv_table(&conn)?;
 
+    // Ensure the prompt_context table exists.
+    queries::ensure_prompt_context_table(&conn)?;
+
     // Probe sqlite-vec and create the virtual table when available.
     vec::init_sqlite_vec(&conn);
     if let Err(e) = vec::ensure_vec_table(&conn) {
@@ -105,6 +109,7 @@ mod tests {
             device_id: "device-1".to_string(),
             hostname: "test-host".to_string(),
             record_sig: "sigxyz".to_string(),
+            prompt_summary: None,
         }
     }
 
@@ -124,7 +129,9 @@ mod tests {
             [],
         );
         let _ = conn.execute("ALTER TABLE records ADD COLUMN embedding BLOB", []);
+        let _ = conn.execute("ALTER TABLE records ADD COLUMN prompt_summary TEXT", []);
         ensure_kv_table(&conn).unwrap();
+        ensure_prompt_context_table(&conn).unwrap();
         conn
     }
 

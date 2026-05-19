@@ -30,7 +30,10 @@ use anyhow::Result;
 
 use cli::{Cli, Command};
 use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
-use db::{clean_all, clean_synced, inspect_records, open_db, pending_count, token_breakdown};
+use db::{
+    clean_all, clean_synced, inspect_records, insert_prompt_context, get_recent_prompt, open_db,
+    pending_count, token_breakdown,
+};
 use init::{detect_tool_statuses, install_hooks, remove_hooks};
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -43,6 +46,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Command::Status => handle_status()?,
         Command::Clean(args) => handle_clean(args)?,
         Command::Heartbeat => handle_heartbeat().await?,
+        Command::PromptCapture(args) => handle_prompt_capture(args).await?,
     }
     Ok(())
 }
@@ -202,6 +206,10 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     );
 
     let conn = open_db()?;
+
+    // Attach most recent prompt for this session
+    record.prompt_summary = get_recent_prompt(&conn, &record.session_id);
+
     let inserted = db::insert_record(&conn, &record)?;
 
     if inserted && !api_url.is_empty() && !credential.is_empty() {
@@ -336,6 +344,52 @@ async fn handle_heartbeat() -> Result<()> {
     let conn = open_db()?;
     heartbeat::send_heartbeat(&conn, &api_url, &credential, true).await?;
     println!("Heartbeat sent.");
+    Ok(())
+}
+
+async fn handle_prompt_capture(args: cli::PromptCaptureArgs) -> Result<()> {
+    use std::io::Read as _;
+    let mut raw = String::new();
+    if let Err(e) = std::io::stdin()
+        .take(STDIN_MAX_BYTES as u64 + 1)
+        .read_to_string(&mut raw)
+    {
+        eprintln!("[aitrack] failed to read stdin: {e}");
+        return Ok(());
+    }
+    if raw.len() > STDIN_MAX_BYTES {
+        eprintln!("[aitrack] stdin payload too large, dropping");
+        return Ok(());
+    }
+    let stdin_json = raw.trim();
+
+    // Only claude is supported for now; other tools don't have UserPromptSubmit
+    if args.tool.as_str() != "claude" {
+        return Ok(());
+    }
+
+    // Parse: {"session_id": "...", "prompt": "..."}
+    let val: serde_json::Value = match serde_json::from_str(stdin_json) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("[aitrack] prompt-capture parse error: {e}");
+            return Ok(());
+        }
+    };
+
+    let session_id = val.get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let prompt = val.get("prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if session_id.is_empty() || prompt.is_empty() {
+        return Ok(());
+    }
+
+    let conn = open_db()?;
+    insert_prompt_context(&conn, session_id, prompt)?;
     Ok(())
 }
 
@@ -523,6 +577,20 @@ mod tests {
     async fn run_dispatch_remove_no_tools() {
         let cli = Cli::parse_from(["aitrack", "remove"]);
         run(cli).await.unwrap();
+    }
+
+    // -------------------------------------------------------------------------
+    // run() dispatch: PromptCapture (missing --tool treated as default "claude")
+    // -------------------------------------------------------------------------
+    #[tokio::test]
+    async fn run_dispatch_prompt_capture_missing_tool_returns_ok() {
+        let dir = TempDir::new().unwrap();
+        with_home_async(&dir, || async {
+            // prompt-capture with default tool reads from stdin; stdin is empty in
+            // test context so it will parse error and return Ok.
+            let cli = Cli::parse_from(["aitrack", "prompt-capture"]);
+            run(cli).await.unwrap();
+        }).await;
     }
 
     // -------------------------------------------------------------------------

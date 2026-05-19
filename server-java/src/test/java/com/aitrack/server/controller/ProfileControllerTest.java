@@ -119,7 +119,7 @@ class ProfileControllerTest {
         profile.setTotalAddedLines(0);
         profile.setTotalRemovedLines(0);
         profile.setGeneratedAt("2026-05-19T00:00:00Z");
-        // frequency, depth, scenarios, tools all null
+        // frequency, depth, languages, tools all null
 
         when(profileService.computeProfile(eq(TOKEN_KEY))).thenReturn(Optional.of(profile));
 

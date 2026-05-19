@@ -64,8 +64,35 @@ pub fn has_claude_hook(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+pub fn has_claude_prompt_hook(path: &Path) -> bool {
+    let Ok(text) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(val) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    val["hooks"]["UserPromptSubmit"]
+        .as_array()
+        .map(|arr| {
+            arr.iter().any(|entry| {
+                entry["hooks"]
+                    .as_array()
+                    .map(|hooks| {
+                        hooks.iter().any(|h| {
+                            h["command"]
+                                .as_str()
+                                .map(|c| c.contains("aitrack prompt-capture"))
+                                .unwrap_or(false)
+                        })
+                    })
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
 pub fn install_claude_hook(path: &Path, aitrack_bin: &str) -> Result<()> {
-    if has_claude_hook(path) {
+    if has_claude_hook(path) && has_claude_prompt_hook(path) {
         return Ok(());
     }
 
@@ -79,30 +106,59 @@ pub fn install_claude_hook(path: &Path, aitrack_bin: &str) -> Result<()> {
         serde_json::json!({})
     };
 
-    let new_entry = serde_json::json!({
-        "matcher": "apply_patch|Edit|Write",
-        "hooks": [
-            {
-                "type": "command",
-                "command": format!("{aitrack_bin} capture --tool claude"),
-                "timeout": 10
-            }
-        ]
-    });
+    if !has_claude_hook(path) {
+        let new_entry = serde_json::json!({
+            "matcher": "apply_patch|Edit|Write",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": format!("{aitrack_bin} capture --tool claude"),
+                    "timeout": 10
+                }
+            ]
+        });
 
-    let hooks = val
-        .as_object_mut()
-        .unwrap()
-        .entry("hooks")
-        .or_insert_with(|| serde_json::json!({}));
-    let post_tool_use = hooks
-        .as_object_mut()
-        .unwrap()
-        .entry("PostToolUse")
-        .or_insert_with(|| serde_json::json!([]));
+        let hooks = val
+            .as_object_mut()
+            .unwrap()
+            .entry("hooks")
+            .or_insert_with(|| serde_json::json!({}));
+        let post_tool_use = hooks
+            .as_object_mut()
+            .unwrap()
+            .entry("PostToolUse")
+            .or_insert_with(|| serde_json::json!([]));
 
-    if let Some(arr) = post_tool_use.as_array_mut() {
-        arr.push(new_entry);
+        if let Some(arr) = post_tool_use.as_array_mut() {
+            arr.push(new_entry);
+        }
+    }
+
+    if !has_claude_prompt_hook(path) {
+        let prompt_entry = serde_json::json!({
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": format!("{aitrack_bin} prompt-capture --tool claude"),
+                    "timeout": 10
+                }
+            ]
+        });
+
+        let hooks = val
+            .as_object_mut()
+            .unwrap()
+            .entry("hooks")
+            .or_insert_with(|| serde_json::json!({}));
+        let user_prompt_submit = hooks
+            .as_object_mut()
+            .unwrap()
+            .entry("UserPromptSubmit")
+            .or_insert_with(|| serde_json::json!([]));
+
+        if let Some(arr) = user_prompt_submit.as_array_mut() {
+            arr.push(prompt_entry);
+        }
     }
 
     let text = serde_json::to_string_pretty(&val)?;
@@ -135,6 +191,28 @@ pub fn remove_claude_hook(path: &Path) -> Result<()> {
         if arr.is_empty() {
             if let Some(hooks) = val["hooks"].as_object_mut() {
                 hooks.remove("PostToolUse");
+            }
+        }
+    }
+
+    if let Some(arr) = val["hooks"]["UserPromptSubmit"].as_array_mut() {
+        arr.retain(|entry| {
+            !entry["hooks"]
+                .as_array()
+                .map(|hooks| {
+                    hooks.iter().any(|h| {
+                        h["command"]
+                            .as_str()
+                            .map(|c| c.contains("aitrack prompt-capture"))
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false)
+        });
+        // Clean up empty UserPromptSubmit array
+        if arr.is_empty() {
+            if let Some(hooks) = val["hooks"].as_object_mut() {
+                hooks.remove("UserPromptSubmit");
             }
         }
     }
@@ -427,6 +505,49 @@ mod tests {
         let path = home.path().join(".claude").join("settings.json");
         // Should not error
         remove_claude_hook(&path).unwrap();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Claude prompt hook tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn claude_prompt_hook_install_and_detect() {
+        let home = setup_home();
+        let path = home.path().join(".claude").join("settings.json");
+        install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
+        assert!(has_claude_prompt_hook(&path), "prompt hook should be installed");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let arr = val["hooks"]["UserPromptSubmit"].as_array().unwrap();
+        assert_eq!(arr.len(), 1, "exactly 1 UserPromptSubmit entry");
+        let cmd = arr[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(cmd.contains("prompt-capture"), "command should contain prompt-capture");
+    }
+
+    #[test]
+    fn claude_prompt_hook_install_is_idempotent() {
+        let home = setup_home();
+        let path = home.path().join(".claude").join("settings.json");
+        install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
+        install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let arr = val["hooks"]["UserPromptSubmit"].as_array().unwrap();
+        assert_eq!(arr.len(), 1, "idempotent: only 1 UserPromptSubmit entry");
+    }
+
+    #[test]
+    fn claude_remove_cleans_prompt_hook_too() {
+        let home = setup_home();
+        let path = home.path().join(".claude").join("settings.json");
+        install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
+        assert!(has_claude_prompt_hook(&path));
+        remove_claude_hook(&path).unwrap();
+        assert!(!has_claude_prompt_hook(&path), "prompt hook should be removed");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(val["hooks"]["UserPromptSubmit"].is_null(), "empty UserPromptSubmit should be removed");
     }
 
     // ---------------------------------------------------------------------------

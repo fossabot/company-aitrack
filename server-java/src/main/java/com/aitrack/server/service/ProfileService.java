@@ -89,14 +89,17 @@ public class ProfileService {
         profile.setDepth(computeDepth(records));
 
         // ------------------------------------------------------------------
-        // Scenario breakdown
+        // Language breakdown
         // ------------------------------------------------------------------
-        Map<String, Long> scenarios = records.stream()
-                .collect(Collectors.groupingBy(
-                        e -> classifyScenario(e.getFilePath()),
-                        Collectors.counting()
-                ));
-        profile.setScenarios(scenarios);
+        profile.setLanguages(computeLanguages(records));
+
+        // ------------------------------------------------------------------
+        // Comment density (set into DepthStats after depth is computed)
+        // ------------------------------------------------------------------
+        ProfileDto.DepthStats depthStats = profile.getDepth();
+        if (depthStats != null) {
+            depthStats.setCommentDensity(computeCommentDensity(records));
+        }
 
         // ------------------------------------------------------------------
         // Tools breakdown (skip null tools)
@@ -108,6 +111,11 @@ public class ProfileService {
                         Collectors.counting()
                 ));
         profile.setTools(tools.isEmpty() ? null : tools);
+
+        // ------------------------------------------------------------------
+        // Prompt patterns
+        // ------------------------------------------------------------------
+        profile.setPromptPatterns(computePromptPatterns(records));
 
         return Optional.of(profile);
     }
@@ -177,40 +185,144 @@ public class ProfileService {
     }
 
     // -------------------------------------------------------------------------
-    // Scenario classification
+    // Language detection
     // -------------------------------------------------------------------------
 
     /**
-     * Classifies a file path into a scenario category.
+     * Detects the programming language from a file path based on its extension.
      *
-     * @param filePath the file path to classify (may be null/blank)
-     * @return one of "test", "docs", "config", "feature", or "other"
+     * @param filePath the file path to examine (may be null/blank)
+     * @return language name string, e.g. "Python", "TypeScript", or "Other"
      */
-    String classifyScenario(String filePath) {
+    String detectLanguage(String filePath) {
         if (filePath == null || filePath.isBlank()) {
-            return "other";
+            return "Other";
         }
-        String lowerPath = filePath.toLowerCase();
+        String lower = filePath.toLowerCase();
 
-        if (lowerPath.contains("/test") || lowerPath.contains("_test.")
-                || lowerPath.contains(".test.") || lowerPath.contains("/spec")
-                || lowerPath.contains("_spec.") || lowerPath.contains(".spec.")) {
-            return "test";
+        if (lower.endsWith(".py"))                                                  return "Python";
+        if (lower.endsWith(".ts") || lower.endsWith(".tsx"))                       return "TypeScript";
+        if (lower.endsWith(".js") || lower.endsWith(".jsx"))                       return "JavaScript";
+        if (lower.endsWith(".java"))                                                return "Java";
+        if (lower.endsWith(".go"))                                                  return "Go";
+        if (lower.endsWith(".rs"))                                                  return "Rust";
+        if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx") || lower.endsWith(".c"))
+                                                                                    return "C/C++";
+        if (lower.endsWith(".cs"))                                                  return "C#";
+        if (lower.endsWith(".rb"))                                                  return "Ruby";
+        if (lower.endsWith(".php"))                                                 return "PHP";
+        if (lower.endsWith(".swift"))                                               return "Swift";
+        if (lower.endsWith(".kt") || lower.endsWith(".kts"))                       return "Kotlin";
+        if (lower.endsWith(".scala"))                                               return "Scala";
+        if (lower.endsWith(".vue"))                                                 return "Vue";
+        if (lower.endsWith(".html") || lower.endsWith(".htm"))                     return "HTML";
+        if (lower.endsWith(".css") || lower.endsWith(".scss") || lower.endsWith(".sass") || lower.endsWith(".less"))
+                                                                                    return "CSS";
+        if (lower.endsWith(".sql"))                                                 return "SQL";
+        if (lower.endsWith(".sh") || lower.endsWith(".bash") || lower.endsWith(".zsh"))
+                                                                                    return "Shell";
+        if (lower.endsWith(".yaml") || lower.endsWith(".yml"))                     return "YAML";
+        if (lower.endsWith(".json"))                                                return "JSON";
+        if (lower.endsWith(".xml"))                                                 return "XML";
+        if (lower.endsWith(".md") || lower.endsWith(".rst") || lower.endsWith(".txt"))
+                                                                                    return "Docs";
+
+        return "Other";
+    }
+
+    /**
+     * Groups records by detected language and returns a count per language.
+     *
+     * @param records non-null list of edit records
+     * @return map from language name to occurrence count
+     */
+    private Map<String, Long> computeLanguages(List<EditRecordEntity> records) {
+        return records.stream()
+                .collect(Collectors.groupingBy(
+                        e -> detectLanguage(e.getFilePath()),
+                        Collectors.counting()
+                ));
+    }
+
+    /**
+     * Computes the comment density across all records.
+     * <p>
+     * For each record the {@code diffHunk} field is inspected. Lines that begin
+     * with {@code +} (added lines in unified-diff format) are counted as total
+     * added lines; among those, lines whose content (after stripping the leading
+     * {@code +}) starts with a known comment prefix are counted as comment lines.
+     *
+     * @param records non-null list of edit records
+     * @return ratio of comment lines to total added lines, or 0.0 if no added lines
+     */
+    double computeCommentDensity(List<EditRecordEntity> records) {
+        long totalAdded = 0;
+        long commentLines = 0;
+
+        for (EditRecordEntity record : records) {
+            String hunk = record.getDiffHunk();
+            if (hunk == null) {
+                continue;
+            }
+            for (String line : hunk.split("\n")) {
+                if (!line.startsWith("+")) {
+                    continue;
+                }
+                totalAdded++;
+                String content = line.substring(1).stripLeading();
+                if (content.startsWith("//")
+                        || content.startsWith("#")
+                        || content.startsWith("/*")
+                        || content.startsWith("* ")
+                        || content.startsWith("*/")
+                        || content.startsWith("/**")
+                        || content.startsWith("\"\"\"")
+                        || content.startsWith("'''")
+                        || content.startsWith("--")
+                        || content.startsWith("<!--")) {
+                    commentLines++;
+                }
+            }
         }
 
-        if (lowerPath.endsWith(".md") || lowerPath.endsWith(".rst") || lowerPath.endsWith(".txt")
-                || lowerPath.contains("/docs/") || lowerPath.contains("/doc/")) {
-            return "docs";
+        if (totalAdded == 0) {
+            return 0.0;
         }
+        return (double) commentLines / totalAdded;
+    }
 
-        if (lowerPath.endsWith(".yaml") || lowerPath.endsWith(".yml") || lowerPath.endsWith(".toml")
-                || lowerPath.endsWith(".json") || lowerPath.endsWith(".xml")
-                || lowerPath.endsWith(".ini") || lowerPath.endsWith(".env")
-                || lowerPath.endsWith(".properties") || lowerPath.contains("/config/")) {
-            return "config";
+    // -------------------------------------------------------------------------
+    // Prompt pattern classification
+    // -------------------------------------------------------------------------
+
+    private Map<String, Long> computePromptPatterns(List<EditRecordEntity> records) {
+        Map<String, Long> patterns = new java.util.LinkedHashMap<>();
+        patterns.put("generate", 0L);
+        patterns.put("fix_debug", 0L);
+        patterns.put("refactor", 0L);
+        patterns.put("explain", 0L);
+        patterns.put("test", 0L);
+        patterns.put("other", 0L);
+
+        for (EditRecordEntity r : records) {
+            String ps = r.getPromptSummary();
+            if (ps == null || ps.isBlank()) continue;
+            String lower = ps.toLowerCase();
+            if (lower.matches(".*(generate|create|write|implement|add).*")) {
+                patterns.merge("generate", 1L, Long::sum);
+            } else if (lower.matches(".*(fix|debug|error|bug|broken|failing).*")) {
+                patterns.merge("fix_debug", 1L, Long::sum);
+            } else if (lower.matches(".*(refactor|clean|improve|reorganize|rename).*")) {
+                patterns.merge("refactor", 1L, Long::sum);
+            } else if (lower.matches(".*(explain|what|how|why|understand|describe).*")) {
+                patterns.merge("explain", 1L, Long::sum);
+            } else if (lower.matches(".*(test|spec|mock|assert|verify).*")) {
+                patterns.merge("test", 1L, Long::sum);
+            } else {
+                patterns.merge("other", 1L, Long::sum);
+            }
         }
-
-        return "feature";
+        return patterns;
     }
 
     // -------------------------------------------------------------------------
