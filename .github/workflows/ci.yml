@@ -17,17 +17,30 @@ defaults:
     shell: bash
 
 jobs:
+  lint:
+    name: Lint (Rust)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: cargo fmt check
+        run: cargo fmt --manifest-path client/Cargo.toml -- --check
+      - name: cargo clippy
+        run: cargo clippy --manifest-path client/Cargo.toml -- -D warnings
+
   client:
     name: Build & test client (Rust)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Check out aitrack
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - name: Build client image (build + test + 90% coverage gate)
         run: docker build -f docker/Dockerfile.client .
 
@@ -35,13 +48,10 @@ jobs:
     name: Build & test server-java (Java 17 + Maven)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Check out aitrack
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - name: Build server-java image (mvn verify + JaCoCo 90% gate)
         run: docker build -f docker/Dockerfile.server-java .
 
@@ -49,13 +59,10 @@ jobs:
     name: Build & test server-go (Go 1.25)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Check out aitrack
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - name: Build server-go image (go test + 90% coverage gate)
         run: docker build -f docker/Dockerfile.server-go .
 
@@ -64,12 +71,9 @@ jobs:
     needs: [client, server-java, server-go]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Check out aitrack
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - name: Run e2e suite against Java and Go servers
         run: bash e2e/run.sh both

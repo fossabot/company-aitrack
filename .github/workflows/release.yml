@@ -1,0 +1,121 @@
+name: aitrack Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_release:
+        description: "Set to 'true' to actually publish the release (default: dry-run)"
+        required: false
+        default: "false"
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: aitrack
+            asset_name: aitrack-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: aitrack
+            asset_name: aitrack-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: aitrack
+            asset_name: aitrack-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: aitrack.exe
+            asset_name: aitrack-windows-x86_64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --manifest-path client/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          cp client/target/${{ matrix.target }}/release/${{ matrix.artifact_name }} \
+             ${{ matrix.asset_name }}
+
+      - name: Generate SHA-256 checksum
+        run: sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: List artifacts
+        run: find artifacts/ -type f | sort
+
+      - name: Check allow_release guard
+        id: guard
+        run: |
+          # On tag push, always allow. On workflow_dispatch, check input.
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.inputs.allow_release }}" == "true" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dry-run mode: release NOT published. Set allow_release=true to publish."
+          fi
+
+      - name: Publish release
+        if: steps.guard.outputs.allowed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

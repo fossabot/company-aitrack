@@ -7,6 +7,7 @@ pub mod diff;
 pub mod git;
 pub mod heartbeat;
 pub mod init;
+pub mod update;
 pub mod uploader;
 #[cfg(test)]
 pub mod testkit;
@@ -47,6 +48,9 @@ pub async fn run(cli: Cli) -> Result<()> {
         Command::Clean(args) => handle_clean(args)?,
         Command::Heartbeat => handle_heartbeat().await?,
         Command::PromptCapture(args) => handle_prompt_capture(args).await?,
+        Command::Update { check_only, force } => {
+            update::run_update(&update::UpdateArgs { check_only, force })?;
+        }
     }
     Ok(())
 }
