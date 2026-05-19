@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aitrack/server/internal/model"
-	"github.com/aitrack/server/internal/service"
+	"github.com/aitrack/server/internal/domain/model"
+	"github.com/aitrack/server/internal/domain/service"
 )
 
 var rng = rand.New(rand.NewSource(42))

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/aitrack/server/internal/app"
-	"github.com/aitrack/server/internal/config"
+	"github.com/aitrack/server/internal/infrastructure/app"
+	"github.com/aitrack/server/internal/infrastructure/config"
 )
 
 func main() {
