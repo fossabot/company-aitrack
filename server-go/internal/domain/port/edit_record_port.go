@@ -9,18 +9,6 @@ import (
 	"github.com/aitrack/server/internal/domain/model"
 )
 
-// StatsRow is the aggregation row produced by the persistence adapter.
-type StatsRow struct {
-	Group        string
-	Edits        int64
-	AddedLines   int64
-	RemovedLines int64
-	Accepted     int64
-	Flagged      int64
-	Rejected     int64
-	LastActive   *time.Time
-}
-
 // EditRecordPort is the persistence port for edit records.
 type EditRecordPort interface {
 	// Save persists a single validated edit record.
@@ -30,13 +18,13 @@ type EditRecordPort interface {
 	// Query returns a page of records plus the total count.
 	Query(tokenKey, repoURL string, page, size int) ([]model.EditRecord, int64, error)
 	// AggregateByTokenKey aggregates stats grouped by token key.
-	AggregateByTokenKey() ([]StatsRow, error)
+	AggregateByTokenKey() ([]model.StatsRow, error)
 	// AggregateByRepo aggregates stats grouped by repo URL.
-	AggregateByRepo() ([]StatsRow, error)
+	AggregateByRepo() ([]model.StatsRow, error)
 	// AggregateByDevice aggregates stats grouped by device ID.
-	AggregateByDevice() ([]StatsRow, error)
+	AggregateByDevice() ([]model.StatsRow, error)
 	// AggregateByHostname aggregates stats grouped by hostname.
-	AggregateByHostname() ([]StatsRow, error)
+	AggregateByHostname() ([]model.StatsRow, error)
 }
 
 // EditRecordCounter is the narrow port used by the validation domain service

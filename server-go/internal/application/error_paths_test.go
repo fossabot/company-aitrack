@@ -39,10 +39,10 @@ func (r *errEditRepo) CountByTokenKeyAndFilePathSince(_, _ string, _ time.Time) 
 func (r *errEditRepo) Query(_, _ string, _, _ int) ([]model.EditRecord, int64, error) {
 	return nil, 0, r.queryErr
 }
-func (r *errEditRepo) AggregateByTokenKey() ([]port.StatsRow, error) { return nil, nil }
-func (r *errEditRepo) AggregateByRepo() ([]port.StatsRow, error)     { return nil, nil }
-func (r *errEditRepo) AggregateByDevice() ([]port.StatsRow, error)   { return nil, nil }
-func (r *errEditRepo) AggregateByHostname() ([]port.StatsRow, error) { return nil, nil }
+func (r *errEditRepo) AggregateByTokenKey() ([]model.StatsRow, error) { return nil, nil }
+func (r *errEditRepo) AggregateByRepo() ([]model.StatsRow, error)     { return nil, nil }
+func (r *errEditRepo) AggregateByDevice() ([]model.StatsRow, error)   { return nil, nil }
+func (r *errEditRepo) AggregateByHostname() ([]model.StatsRow, error) { return nil, nil }
 
 // errTokenRepo is a TokenPort that always returns errors.
 type errTokenRepo struct {
@@ -319,10 +319,10 @@ func (r *errAggEditRepo) CountByTokenKeyAndFilePathSince(_, _ string, _ time.Tim
 func (r *errAggEditRepo) Query(_, _ string, _, _ int) ([]model.EditRecord, int64, error) {
 	return nil, 0, nil
 }
-func (r *errAggEditRepo) AggregateByTokenKey() ([]port.StatsRow, error) { return nil, r.aggErr }
-func (r *errAggEditRepo) AggregateByRepo() ([]port.StatsRow, error)     { return nil, r.aggErr }
-func (r *errAggEditRepo) AggregateByDevice() ([]port.StatsRow, error)   { return nil, r.aggErr }
-func (r *errAggEditRepo) AggregateByHostname() ([]port.StatsRow, error) { return nil, r.aggErr }
+func (r *errAggEditRepo) AggregateByTokenKey() ([]model.StatsRow, error) { return nil, r.aggErr }
+func (r *errAggEditRepo) AggregateByRepo() ([]model.StatsRow, error)     { return nil, r.aggErr }
+func (r *errAggEditRepo) AggregateByDevice() ([]model.StatsRow, error)   { return nil, r.aggErr }
+func (r *errAggEditRepo) AggregateByHostname() ([]model.StatsRow, error) { return nil, r.aggErr }
 
 // ─── string helpers ───────────────────────────────────────────────────────────
 

@@ -58,9 +58,12 @@ func NewStatsService(editRepo port.EditRecordPort, deviceRepo port.DevicePort) *
 }
 
 // GetStats returns aggregated stats grouped by the given dimension.
+// Always returns a non-nil slice (empty if no data).
 func (s *StatsService) GetStats(groupBy string) ([]model.StatsRow, error) {
-	var rows []port.StatsRow
-	var err error
+	var (
+		rows []model.StatsRow
+		err  error
+	)
 	switch groupBy {
 	case "repo":
 		rows, err = s.editRepo.AggregateByRepo()
@@ -74,20 +77,10 @@ func (s *StatsService) GetStats(groupBy string) ([]model.StatsRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := make([]model.StatsRow, len(rows))
-	for i, r := range rows {
-		result[i] = model.StatsRow{
-			Group:        r.Group,
-			Edits:        r.Edits,
-			AddedLines:   r.AddedLines,
-			RemovedLines: r.RemovedLines,
-			Accepted:     r.Accepted,
-			Flagged:      r.Flagged,
-			Rejected:     r.Rejected,
-			LastActive:   r.LastActive,
-		}
+	if rows == nil {
+		rows = []model.StatsRow{}
 	}
-	return result, nil
+	return rows, nil
 }
 
 // GetDevices lists all devices, marking those silent for more than 7 days.

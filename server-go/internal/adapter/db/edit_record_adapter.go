@@ -109,22 +109,22 @@ func (r *EditRecordAdapter) Query(tokenKey, repoURL string, page, size int) ([]m
 }
 
 // AggregateByTokenKey aggregates stats grouped by token key.
-func (r *EditRecordAdapter) AggregateByTokenKey() ([]port.StatsRow, error) {
+func (r *EditRecordAdapter) AggregateByTokenKey() ([]model.StatsRow, error) {
 	return r.aggregate("token_key")
 }
 
 // AggregateByRepo aggregates stats grouped by repo URL.
-func (r *EditRecordAdapter) AggregateByRepo() ([]port.StatsRow, error) {
+func (r *EditRecordAdapter) AggregateByRepo() ([]model.StatsRow, error) {
 	return r.aggregate("repo_url")
 }
 
 // AggregateByDevice aggregates stats grouped by device ID.
-func (r *EditRecordAdapter) AggregateByDevice() ([]port.StatsRow, error) {
+func (r *EditRecordAdapter) AggregateByDevice() ([]model.StatsRow, error) {
 	return r.aggregate("device_id")
 }
 
 // AggregateByHostname aggregates stats grouped by hostname.
-func (r *EditRecordAdapter) AggregateByHostname() ([]port.StatsRow, error) {
+func (r *EditRecordAdapter) AggregateByHostname() ([]model.StatsRow, error) {
 	return r.aggregate("hostname")
 }
 
@@ -135,7 +135,7 @@ var allowedGroupCols = map[string]bool{
 	"hostname":  true,
 }
 
-func (r *EditRecordAdapter) aggregate(groupCol string) ([]port.StatsRow, error) {
+func (r *EditRecordAdapter) aggregate(groupCol string) ([]model.StatsRow, error) {
 	if !allowedGroupCols[groupCol] {
 		return nil, fmt.Errorf("invalid group column: %q", groupCol)
 	}
@@ -154,9 +154,9 @@ func (r *EditRecordAdapter) aggregate(groupCol string) ([]port.StatsRow, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var result []port.StatsRow
+	var result []model.StatsRow
 	for rows.Next() {
-		var sr port.StatsRow
+		var sr model.StatsRow
 		var lastActive string
 		if err := rows.Scan(&sr.Group, &sr.Edits, &sr.AddedLines, &sr.RemovedLines,
 			&sr.Accepted, &sr.Flagged, &sr.Rejected, &lastActive); err != nil {
