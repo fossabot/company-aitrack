@@ -66,16 +66,12 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    /// Serialise all tests that touch the process-global `VEC_DISABLED` flag so
-    /// they don't race each other when `cargo test` runs them in parallel threads.
+    /// Serialise all tests that touch the process-global `VEC_DISABLED` flag.
     static FLAG_MUTEX: Mutex<()> = Mutex::new(());
 
-    /// Resetting the flag between tests is important because `AtomicBool` is
-    /// process-global.  Tests that need a clean state must restore it.
     #[test]
     fn vec_disabled_flag_works() {
         let _guard = FLAG_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
-        // Save original state
         let original = VEC_DISABLED.load(Ordering::Relaxed);
 
         VEC_DISABLED.store(true, Ordering::Relaxed);
@@ -84,7 +80,6 @@ mod tests {
         VEC_DISABLED.store(false, Ordering::Relaxed);
         assert!(is_vec_enabled(), "should report enabled when flag is false");
 
-        // Restore
         VEC_DISABLED.store(original, Ordering::Relaxed);
     }
 
@@ -95,7 +90,6 @@ mod tests {
         VEC_DISABLED.store(true, Ordering::Relaxed);
 
         let conn = rusqlite::Connection::open_in_memory().unwrap();
-        // Must return Ok even without extension loaded
         assert!(ensure_vec_table(&conn).is_ok());
 
         VEC_DISABLED.store(original, Ordering::Relaxed);
@@ -104,17 +98,10 @@ mod tests {
     #[test]
     fn init_sqlite_vec_sets_disabled_when_extension_absent() {
         let _guard = FLAG_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
-        // Open a fresh in-memory connection WITHOUT the auto_extension registered;
-        // sqlite-vec should not be present, so init_sqlite_vec must set the flag.
-        // Note: if register_auto_extension() was called earlier in this process the
-        // flag might remain false — we guard with a direct connection check.
         let original = VEC_DISABLED.load(Ordering::Relaxed);
-        // Reset so we can observe the transition
         VEC_DISABLED.store(false, Ordering::Relaxed);
 
         let conn = rusqlite::Connection::open_in_memory().unwrap();
-        // If vec_version() succeeds the extension was registered globally; that's
-        // fine — we just confirm the flag reflects reality.
         let vec_present = conn
             .query_row("SELECT vec_version()", [], |r| r.get::<_, String>(0))
             .is_ok();

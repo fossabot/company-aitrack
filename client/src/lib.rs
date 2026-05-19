@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod adapters;
 pub mod cli;
 pub mod config;
@@ -8,6 +9,7 @@ pub mod domain;
 pub mod git;
 pub mod heartbeat;
 pub mod init;
+pub mod port;
 pub mod update;
 pub mod uploader;
 #[cfg(test)]

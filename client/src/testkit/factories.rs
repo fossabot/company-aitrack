@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::db::Record;
+use crate::domain::model::Record;
 
 // ---------------------------------------------------------------------------
 // Seed-based deterministic helpers
