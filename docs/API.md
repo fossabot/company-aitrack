@@ -21,6 +21,7 @@
 | **管理员** | 查看团队 AI 用量 | `GET /api/v1/ai-track/stats` — 按维度统计 |
 | **管理员** | 排查可疑设备 / 钩子状态 | `GET /api/v1/ai-track/devices` — 设备心跳列表 |
 | **管理员** | 原始记录审计 | `GET /api/v1/ai-track/edits` — 分页查询 |
+| **管理员** | 查看开发者 AI 使用画像 | `GET /api/v1/ai-track/profiles/{token_key}` — 开发者使用画像 |
 
 ### 步骤一：启动服务端
 
@@ -838,10 +839,12 @@ curl -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
   },
   "depth": {
     "avg_lines": 47.2, "p50_lines": 18, "p90_lines": 142,
-    "small_count": 89, "medium_count": 112, "large_count": 46
+    "small_count": 89, "medium_count": 112, "large_count": 46,
+    "comment_density": 0.12
   },
-  "scenarios": {"test": 43, "docs": 12, "config": 8, "feature": 148, "other": 36},
-  "tools": {"claude": 210, "codex": 28, "cursor": 9}
+  "languages": {"Python": 120, "TypeScript": 80, "Go": 35, "Java": 12},
+  "tools": {"claude": 210, "codex": 28, "cursor": 9},
+  "prompt_patterns": {"generate": 148, "fix_debug": 43, "refactor": 12, "explain": 8, "test": 20, "other": 16}
 }
 ```
 

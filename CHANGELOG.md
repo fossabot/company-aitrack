@@ -4,6 +4,21 @@
 
 ---
 
+## [v1.5.0] — 2026-05-19
+
+### Added
+
+- **Phase 4: Prompt Capture Pipeline**
+  - Client: installs `UserPromptSubmit` hook (Claude Code only) alongside `PostToolUse`; new `prompt-capture` subcommand stores user prompt text (≤512 chars) in local `prompt_context` SQLite table
+  - Client: `capture` flow attaches most recent session prompt as optional `prompt_summary` on each edit record
+  - DB: new `prompt_context` table (session_id, prompt_text, created_at); `prompt_summary TEXT` column added to `records` via migration
+  - Profile API: `prompt_patterns` dimension — keyword intent classification (generate/fix_debug/refactor/explain/test/other) from `prompt_summary` text
+  - Profile dimensions redesigned: `scenarios` → `languages` (file-extension based, 23 types) + `depth.comment_density` (ratio of comment lines in diff_hunk added lines)
+  - CONTRACT.md updated: `prompt-capture` command, `UserPromptSubmit` hook template, optional `prompt_summary` field, `prompt_patterns`/`languages`/`comment_density` in profile schema
+  - Rust 200 tests pass, Java 215 tests pass, Go all packages pass
+
+---
+
 ## [v1.4.0] — 2026-05-19
 
 ### Added
