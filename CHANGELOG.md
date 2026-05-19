@@ -4,6 +4,50 @@
 
 ---
 
+## v1.3.0 — 2026-05-19
+
+### 发布说明
+
+v1.3.0 完成三个 DB 阶段：DB-1 接入 ParadeDB/PostgreSQL 服务端、DB-2 客户端 sqlite-vec 向量扩展、DB-3 语义搜索 API。
+
+### 新增
+
+**Phase DB-1 — ParadeDB / PostgreSQL 服务端支持**
+- Java 服务端：`postgres` Spring Profile，通过 `SPRING_PROFILES_ACTIVE=postgres` 激活
+- Go 服务端：`DATABASE_URL` 环境变量切换至 PostgreSQL；未设置时回退到嵌入式 SQLite
+- `edit_records` 表：新增可空列 `embedding BYTEA/BLOB` 和 `prompt_summary TEXT`
+- docker-compose：新增 `paradedb/paradedb:latest` 服务，含 `pg_isready` 健康检查
+
+**Phase DB-2 — 客户端 sqlite-vec 向量扩展**
+- 重构 `client/src/db.rs` → `client/src/db/` 模块（mod / schema / models / queries / vec）
+- sqlite-vec 通过 `sqlite3_auto_extension` 注册；`VEC_DISABLED` 标志用于优雅降级
+- `records` 表：新增可空列 `embedding BLOB`
+- 新增 `vec_records` 虚拟表（`vec0(embedding float[384])`，384 维 MiniLM 空间）
+
+**Phase DB-3 — 语义搜索 API**
+- `GET /api/v1/ai-track/edits/search?q=`：ParadeDB BM25 全文检索（`|||` 运算符）
+- `POST /api/v1/ai-track/edits/similar`：pgvector HNSW ANN 近似相似度（384 维余弦距离）
+- 两个端点均支持可选 `token_key`/`repo` 过滤；H2/SQLite 模式下返回 HTTP 501
+- Java `EditSearchController` + `EditSearchService`；Go `SearchHandler` + `SimilarHandler`
+- `CONTRACT.md` 新增两个端点的完整请求/响应 schema
+
+### 工具链
+
+- Go 1.24 → **1.25**（pgx v5.9.x 要求）
+- JaCoCo **0.8.11 → 0.8.13**（Java 25 字节码支持）
+- `pgx/v5` **5.7.2 → 5.9.2**（修复 1 个 Critical + 1 个 Low CVE）
+- `golang.org/x/crypto` 升级（修复 1 个 High + 2 个 Medium CVE）
+
+### 覆盖率
+
+| 组件 | 测试数 | 行覆盖率 |
+|------|--------|---------|
+| Rust 客户端 | 196 | 91.79% |
+| Java 服务端 | 186 | 95% |
+| Go 服务端 | 70 | 93.2% |
+
+---
+
 ## v1.2.0 — 2026-05-18
 
 ### 发布说明
