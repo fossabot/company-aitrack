@@ -4,7 +4,19 @@
 
 ---
 
-## [v1.5.0] — 2026-05-19
+## [v1.6.0] — 2026-05-20
+
+### Changed
+
+- **Sprint 2: Hexagonal architecture refactor across all three components**
+  - Rust client: `client/src/` restructured into `domain/` (pure domain logic: model, crypto, diff, keywords), `port/` (StoragePort / UploadPort abstractions), and `adapter/` (sqlite/ + http/ + event/ implementations); legacy `adapters/` and `db/` modules retained for backward compatibility; fixed concurrent race condition via `FLAG_MUTEX: Mutex<()>` in `db/vec.rs`; 291 tests pass, ≥ 90% line coverage
+  - Go server: added `domain/port/` (EditRecordPort / HeartbeatPort / TokenPort), `application/` (IngestUsecase / ProfileUsecase / TokenUsecase), `adapter/` (db/ + handler/), and `infrastructure/` (app/ + config/) layers; added `ValidationPolicy` value object; 244 tests pass, 92.1% coverage
+  - Java server: added `domain/port/` (DevicePort / EditRecordPort / TokenPort); extracted `ValidationPolicy.java` as a pure domain value object (Spring dependency removed); 218 tests pass, LINE ≥ 90%
+  - E2E: `e2e/mock_chain_test.go` — 3 new Phase 4 mock chain tests (no real credentials required)
+
+---
+
+## [v1.5.0] — 2026-05-20
 
 ### Added
 

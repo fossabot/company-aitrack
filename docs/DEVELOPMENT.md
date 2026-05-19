@@ -48,20 +48,15 @@ cargo llvm-cov --open
 
 ### 测试模块覆盖情况
 
-| 模块 | 测试数 | 行覆盖率 |
-|------|--------|----------|
-| `adapters/claude.rs` | 9 | 98.6% |
-| `adapters/codex.rs` | 9 | 99.3% |
-| `adapters/cursor.rs` | 8 | 100% |
-| `config.rs` | 17 | 83.9% |
-| `crypto.rs` | 13 | 100% |
-| `db/` | 18 | 91.7% |
-| `diff.rs` | 12 | 100% |
-| `git.rs` | 4 | 97.2% |
-| `heartbeat.rs` | 9 | 97.4% |
-| `init.rs` | 23 | 95.1% |
-| `uploader.rs` | 12 | 99.0% |
-| **TOTAL** | **143** | **87.75% 行 / 90.24% 函数** |
+| Module | Tests (Sprint 2) | Line Coverage |
+|--------|---------|---------------|
+| `domain/` | — | ≥ 90% |
+| `port/` | — | ≥ 90% |
+| `adapter/sqlite/`, `adapter/http/`, `adapter/event/` | — | ≥ 90% |
+| `config.rs` / `git.rs` / `init.rs` / `uploader.rs` / ... | — | ≥ 90% |
+| **TOTAL** | **291** | **≥ 90% LINE** |
+
+> After the Sprint 2 hexagonal architecture refactor, tests were reorganized with the domain modules. Total test count increased from 143 to 291. Run `cargo llvm-cov --summary-only` for the latest per-module breakdown.
 
 测试均为 `#[cfg(test)]` 内联模块。HTTP mock 使用 `wiremock`，临时文件使用 `tempfile`。
 
