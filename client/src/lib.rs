@@ -647,4 +647,73 @@ mod tests {
             handle_inspect(args).unwrap();
         }).await;
     }
+
+    // -------------------------------------------------------------------------
+    // print_banner: must not panic; output contains "aitrack"
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_print_banner_does_not_panic() {
+        // print_banner writes to stdout — just verify it completes without panic.
+        print_banner();
+    }
+
+    // -------------------------------------------------------------------------
+    // handle_init: no tools selected → returns Ok
+    // -------------------------------------------------------------------------
+    #[tokio::test]
+    async fn run_init_no_tools_returns_ok() {
+        let dir = TempDir::new().unwrap();
+        with_home_async(&dir, || async {
+            let args = cli::InitArgs {
+                claude: false,
+                codex: false,
+                cursor: false,
+                api_url: None,
+                credential: None,
+            };
+            handle_init(args).await.unwrap();
+        }).await;
+    }
+
+    // -------------------------------------------------------------------------
+    // handle_remove: with tools selected (uses temp home so no real FS impact)
+    // -------------------------------------------------------------------------
+    #[test]
+    fn handle_remove_claude_selected_returns_ok() {
+        let dir = TempDir::new().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("AITRACK_HOME", dir.path());
+        let args = cli::RemoveArgs {
+            claude: true,
+            codex: false,
+            cursor: false,
+        };
+        let result = handle_remove(args);
+        std::env::remove_var("AITRACK_HOME");
+        assert!(result.is_ok());
+    }
+
+    // -------------------------------------------------------------------------
+    // run() dispatch: Init (no tools → Ok fast path)
+    // -------------------------------------------------------------------------
+    #[tokio::test]
+    async fn run_dispatch_init_no_tools() {
+        let dir = TempDir::new().unwrap();
+        with_home_async(&dir, || async {
+            let cli = Cli::parse_from(["aitrack", "init"]);
+            run(cli).await.unwrap();
+        }).await;
+    }
+
+    // -------------------------------------------------------------------------
+    // run() dispatch: Clean --force (synced-only, no --all)
+    // -------------------------------------------------------------------------
+    #[tokio::test]
+    async fn run_dispatch_clean_force_synced() {
+        let dir = TempDir::new().unwrap();
+        with_home_async(&dir, || async {
+            let cli = Cli::parse_from(["aitrack", "clean", "--force"]);
+            run(cli).await.unwrap();
+        }).await;
+    }
 }

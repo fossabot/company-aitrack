@@ -69,20 +69,30 @@ pub fn platform_target_string() -> String {
 // Signature verification
 // ---------------------------------------------------------------------------
 
-/// Verify a raw 64-byte ed25519 `signature` over `message` using `pubkey_b64`.
-fn verify_signature(pubkey_b64: &str, message: &[u8], signature_b64: &str) -> Result<()> {
+/// Decode and validate an ed25519 verifying key from a base64 string.
+///
+/// Returns `Err` if:
+/// - the base64 is invalid,
+/// - the decoded length is not exactly 32 bytes,
+/// - the bytes form an all-zero key (placeholder — not a real key), or
+/// - the bytes do not constitute a valid ed25519 point.
+pub fn load_verifying_key(pubkey_b64: &str) -> Result<VerifyingKey> {
     let key_bytes = B64
         .decode(pubkey_b64)
         .context("failed to base64-decode public key")?;
     if key_bytes.len() != 32 {
-        bail!(
-            "public key must be 32 bytes, got {}",
-            key_bytes.len()
-        );
+        bail!("public key must be 32 bytes, got {}", key_bytes.len());
+    }
+    if key_bytes.iter().all(|&b| b == 0) {
+        bail!("ed25519 public key is placeholder (all-zero); set real key before release");
     }
     let key_arr: [u8; 32] = key_bytes.try_into().unwrap();
-    let verifying_key =
-        VerifyingKey::from_bytes(&key_arr).context("invalid ed25519 public key bytes")?;
+    VerifyingKey::from_bytes(&key_arr).context("invalid ed25519 public key bytes")
+}
+
+/// Verify a raw 64-byte ed25519 `signature` over `message` using `pubkey_b64`.
+fn verify_signature(pubkey_b64: &str, message: &[u8], signature_b64: &str) -> Result<()> {
+    let verifying_key = load_verifying_key(pubkey_b64)?;
 
     let sig_bytes = B64
         .decode(signature_b64.trim())
@@ -155,6 +165,32 @@ fn replace_current_exe(new_bytes: &[u8]) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Asset lookup helpers (testable without network)
+// ---------------------------------------------------------------------------
+
+/// Given a parsed `Release`, return `(binary_url, sig_url)` for `target`.
+/// Returns `Err` if either asset is absent.
+pub fn find_asset_urls<'a>(release: &'a Release, target: &str) -> Result<(&'a str, &'a str)> {
+    let bin_asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == target)
+        .with_context(|| format!("no asset named '{target}' in latest release"))?;
+
+    let sig_name = format!("{target}.sig");
+    let sig_asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == sig_name)
+        .with_context(|| format!("no signature asset named '{sig_name}' in latest release"))?;
+
+    Ok((
+        bin_asset.browser_download_url.as_str(),
+        sig_asset.browser_download_url.as_str(),
+    ))
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -170,28 +206,21 @@ pub fn run_update() -> Result<()> {
 
     println!("Latest release: {}", release.tag_name);
 
-    // Find binary asset.
-    let bin_asset = release
-        .assets
-        .iter()
-        .find(|a| a.name == target)
-        .with_context(|| format!("no asset named '{target}' in latest release"))?;
+    // Early-exit if already on the latest version.
+    let current_version = env!("CARGO_PKG_VERSION");
+    let tag = release.tag_name.trim_start_matches('v');
+    if tag == current_version {
+        println!("Already up to date (v{current_version}).");
+        return Ok(());
+    }
 
-    // Find companion .sig asset.
-    let sig_name = format!("{target}.sig");
-    let sig_asset = release
-        .assets
-        .iter()
-        .find(|a| a.name == sig_name)
-        .with_context(|| format!("no signature asset named '{sig_name}' in latest release"))?;
+    let (bin_url, sig_url) = find_asset_urls(&release, &target)?;
 
-    println!("Downloading {}...", bin_asset.name);
-    let bin_bytes =
-        http_get_bytes(&bin_asset.browser_download_url).context("failed to download binary")?;
+    println!("Downloading {target}...");
+    let bin_bytes = http_get_bytes(bin_url).context("failed to download binary")?;
 
-    println!("Downloading {}...", sig_asset.name);
-    let sig_text =
-        http_get_text(&sig_asset.browser_download_url).context("failed to download signature")?;
+    println!("Downloading {target}.sig...");
+    let sig_text = http_get_text(sig_url).context("failed to download signature")?;
 
     // Verify before touching the filesystem.
     println!("Verifying ed25519 signature...");
@@ -281,6 +310,163 @@ mod tests {
         assert!(
             result.is_err(),
             "expected signature to be rejected for wrong message"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // load_verifying_key: all-zero key must be rejected
+    // -----------------------------------------------------------------------
+
+    /// The constant `ED25519_PUBKEY_BASE64` shipped in the binary is intentionally
+    /// all-zero (placeholder). `load_verifying_key` must refuse it so a binary
+    /// built without a real signing key cannot silently accept any signature.
+    #[test]
+    fn test_load_verifying_key_rejects_zero_key() {
+        let all_zeros_b64 = B64.encode([0u8; 32]);
+        let result = load_verifying_key(&all_zeros_b64);
+        assert!(
+            result.is_err(),
+            "expected all-zero key to be rejected, but load_verifying_key returned Ok"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("placeholder") || msg.contains("all-zero"),
+            "error message should mention placeholder/all-zero, got: {msg}"
+        );
+    }
+
+    /// The default `ED25519_PUBKEY_BASE64` constant is also all-zeros and must be
+    /// rejected at the `load_verifying_key` boundary.
+    #[test]
+    fn test_default_pubkey_constant_is_placeholder() {
+        let result = load_verifying_key(ED25519_PUBKEY_BASE64);
+        assert!(
+            result.is_err(),
+            "ED25519_PUBKEY_BASE64 should be placeholder and must be rejected"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // load_verifying_key: wrong length rejected
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_load_verifying_key_rejects_short_key() {
+        // Only 16 bytes — should be rejected for wrong length.
+        let short_b64 = B64.encode([0xABu8; 16]);
+        let result = load_verifying_key(&short_b64);
+        assert!(result.is_err(), "short key (16 bytes) must be rejected");
+    }
+
+    #[test]
+    fn test_load_verifying_key_rejects_invalid_base64() {
+        let result = load_verifying_key("not-valid-base64!!!");
+        assert!(result.is_err(), "invalid base64 must be rejected");
+    }
+
+    // -----------------------------------------------------------------------
+    // verify_signature: wrong-length signature rejected
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_verify_signature_rejects_short_sig() {
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let verifying_key = signing_key.verifying_key();
+        let pubkey_b64 = B64.encode(verifying_key.as_bytes());
+
+        // Only 32 bytes for the sig instead of 64.
+        let short_sig = B64.encode([0u8; 32]);
+        let result = verify_signature(&pubkey_b64, b"message", &short_sig);
+        assert!(result.is_err(), "short signature must be rejected");
+    }
+
+    // -----------------------------------------------------------------------
+    // find_asset_urls: happy path and missing-asset error
+    // -----------------------------------------------------------------------
+
+    fn make_release(tag: &str, asset_names: &[&str]) -> Release {
+        Release {
+            tag_name: tag.to_string(),
+            assets: asset_names
+                .iter()
+                .map(|name| Asset {
+                    name: name.to_string(),
+                    browser_download_url: format!("https://example.com/{name}"),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn test_find_asset_urls_happy_path() {
+        let target = "aitrack-x86_64-unknown-linux-musl";
+        let sig = format!("{target}.sig");
+        let release = make_release("v1.2.3", &[target, sig.as_str(), "other-file"]);
+
+        let result = find_asset_urls(&release, target);
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result.err());
+        let (bin_url, sig_url) = result.unwrap();
+        assert!(bin_url.contains(target));
+        assert!(sig_url.contains(target));
+        assert!(sig_url.ends_with(".sig"));
+    }
+
+    #[test]
+    fn test_find_asset_urls_missing_binary() {
+        let target = "aitrack-x86_64-unknown-linux-musl";
+        // Release has only the .sig, not the binary.
+        let sig = format!("{target}.sig");
+        let release = make_release("v1.2.3", &[sig.as_str()]);
+
+        let result = find_asset_urls(&release, target);
+        assert!(result.is_err(), "missing binary asset must return Err");
+    }
+
+    #[test]
+    fn test_find_asset_urls_missing_sig() {
+        let target = "aitrack-x86_64-unknown-linux-musl";
+        // Release has only the binary, not the .sig.
+        let release = make_release("v1.2.3", &[target]);
+
+        let result = find_asset_urls(&release, target);
+        assert!(result.is_err(), "missing sig asset must return Err");
+    }
+
+    #[test]
+    fn test_find_asset_urls_empty_assets() {
+        let target = "aitrack-x86_64-unknown-linux-musl";
+        let release = make_release("v1.2.3", &[]);
+
+        let result = find_asset_urls(&release, target);
+        assert!(result.is_err(), "empty asset list must return Err");
+    }
+
+    // -----------------------------------------------------------------------
+    // platform_target_string: additional invariants
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_platform_target_no_spaces() {
+        let s = platform_target_string();
+        assert!(!s.contains(' '), "platform string must not contain spaces: {s}");
+    }
+
+    #[test]
+    fn test_platform_target_contains_arch() {
+        let s = platform_target_string();
+        let arch = std::env::consts::ARCH;
+        // The arch should appear somewhere in the string.
+        let arch_mapped = match arch {
+            "aarch64" => "aarch64",
+            "x86_64" => "x86_64",
+            other => other,
+        };
+        assert!(
+            s.contains(arch_mapped),
+            "platform string '{s}' should contain arch '{arch_mapped}'"
         );
     }
 }
