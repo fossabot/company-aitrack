@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/MapleEve/company-aitrack)](LICENSE)
 [![Self-hosting first](https://img.shields.io/badge/self--hosting-first-blue?logo=docker&logoColor=white)](docs/DEPLOYMENT.md)
 
-[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[简体中文](README.md) | [English](README.en.md) | **日本語** | [한국어](README.ko.md)
 
 ---
 
