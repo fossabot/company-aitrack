@@ -64,7 +64,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	editsH := handler.NewEditsHandler(auth, ingestSvc)
 	hbH := handler.NewHeartbeatHandler(auth, heartbeatSvc)
 	statsH := handler.NewStatsHandler(auth, statsSvc)
-	router := handler.NewRouter(adminH, editsH, hbH, statsH)
+	searchH := handler.NewSearchHandler(database, cfg.AdminKey, false /* SQLite in tests */)
+	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, false /* SQLite in tests */)
+	router := handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH)
 
 	// Pre-create a token for API tests
 	resp, err := tokenSvc.CreateToken(&model.CreateTokenRequest{Owner: "tester"})

@@ -39,11 +39,15 @@ func Build(cfg *config.Config) (http.Handler, func(), error) {
 	heartbeatSvc := service.NewHeartbeatService(deviceRepo)
 	statsSvc := service.NewStatsService(editRepo, deviceRepo)
 
+	isPostgres := cfg.DB.DatabaseURL != ""
+
 	auth := handler.NewAuthMiddleware(tokenSvc, sig, cfg)
 	adminH := handler.NewAdminHandler(tokenSvc, cfg)
 	editsH := handler.NewEditsHandler(auth, ingestSvc)
 	hbH := handler.NewHeartbeatHandler(auth, heartbeatSvc)
 	statsH := handler.NewStatsHandler(auth, statsSvc)
+	searchH := handler.NewSearchHandler(database, cfg.AdminKey, isPostgres)
+	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, isPostgres)
 
-	return handler.NewRouter(adminH, editsH, hbH, statsH), cleanup, nil
+	return handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH), cleanup, nil
 }

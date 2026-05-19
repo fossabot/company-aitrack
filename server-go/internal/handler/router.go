@@ -8,7 +8,7 @@ import (
 )
 
 // NewRouter wires all handlers into a chi router.
-func NewRouter(admin *AdminHandler, edits *EditsHandler, hb *HeartbeatHandler, stats *StatsHandler) http.Handler {
+func NewRouter(admin *AdminHandler, edits *EditsHandler, hb *HeartbeatHandler, stats *StatsHandler, search *SearchHandler, similar *SimilarHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
@@ -18,6 +18,8 @@ func NewRouter(admin *AdminHandler, edits *EditsHandler, hb *HeartbeatHandler, s
 	r.Route("/api/v1/ai-track", func(r chi.Router) {
 		r.Post("/edits", edits.SubmitEdits)
 		r.Get("/edits", edits.QueryEdits)
+		r.Get("/edits/search", search.Search)
+		r.Post("/edits/similar", similar.Similar)
 		r.Post("/heartbeat", hb.Heartbeat)
 		r.Get("/stats", stats.Stats)
 		r.Get("/devices", stats.Devices)
