@@ -129,6 +129,8 @@ X-AiTrack-Signature = lowercase_hex(
 | 管理 | POST | `/admin/tokens` | 签发新 token |
 | 编辑 | POST | `/api/v1/ai-track/edits` | 批量上报编辑记录 |
 | 编辑 | GET | `/api/v1/ai-track/edits` | 分页查询编辑记录 |
+| 编辑 | GET | `/api/v1/ai-track/edits/search` | BM25 full-text search (ParadeDB mode only) |
+| 编辑 | POST | `/api/v1/ai-track/edits/similar` | Vector ANN similarity search (ParadeDB mode only) |
 | 心跳 | POST | `/api/v1/ai-track/heartbeat` | 设备心跳上报 |
 | 统计 | GET | `/api/v1/ai-track/stats` | 聚合统计 |
 | 设备 | GET | `/api/v1/ai-track/devices` | 设备列表 |
@@ -696,3 +698,106 @@ curl -s "http://localhost:8080/api/v1/ai-track/devices" \
 - `silent=true` → 所有工具钩子均已移除，可能存在主动规避采集的行为
 - `last_seen` 超过 3 天未更新（且开发者仍活跃）→ 客户端可能离线或崩溃
 - `pending_count` 持续偏大 → 网络或鉴权异常，客户端数据积压无法上报
+
+---
+
+## `GET /api/v1/ai-track/edits/search` — BM25 Full-Text Search
+
+**Auth**: `X-Admin-Key` header  
+**Availability**: PostgreSQL/ParadeDB mode only. Returns `501 Not Implemented` in H2/SQLite mode.
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `q` | string | ✓ | — | Search query text |
+| `limit` | int | ✗ | 20 | Max results (max 100) |
+| `token_key` | string | ✗ | — | Filter to a specific developer |
+| `repo` | string | ✗ | — | Filter to a specific repository |
+
+### Response `200 OK`
+
+```json
+{
+  "query": "refactor authentication",
+  "total": 2,
+  "hits": [
+    {
+      "record_id": "abc123",
+      "token_key": "tk_xxxx",
+      "repo": "my-org/backend",
+      "file_path": "src/auth/handler.go",
+      "diff_hunk": "@@ -10,5 +10,8 @@ ...",
+      "ai_lines_added": 12,
+      "ai_lines_removed": 3,
+      "ts": 1748000000,
+      "score": 0.8734
+    }
+  ]
+}
+```
+
+`score` is the BM25 relevance score (higher = more relevant). Results are returned in descending score order.
+
+### Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | `q` is missing or blank |
+| 403 | Missing or invalid `X-Admin-Key` |
+| 501 | Server not running in PostgreSQL/ParadeDB mode |
+
+---
+
+## `POST /api/v1/ai-track/edits/similar` — Vector ANN Similarity Search
+
+**Auth**: `X-Admin-Key` header  
+**Availability**: PostgreSQL/ParadeDB mode only. Returns `501 Not Implemented` in H2/SQLite mode.
+
+### Request Body
+
+```json
+{
+  "embedding": [0.023, -0.147, 0.891, "... 381 more floats"],
+  "limit": 10,
+  "token_key": "tk_xxxx",
+  "repo": "my-org/backend"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `embedding` | float[384] | ✓ | Query vector in all-MiniLM-L6-v2 space (384 dimensions) |
+| `limit` | int | ✗ | Max results (default 10, max 50) |
+| `token_key` | string | ✗ | Filter to a specific developer |
+| `repo` | string | ✗ | Filter to a specific repository |
+
+### Response `200 OK`
+
+```json
+{
+  "hits": [
+    {
+      "record_id": "def456",
+      "token_key": "tk_xxxx",
+      "repo": "my-org/backend",
+      "file_path": "src/auth/middleware.go",
+      "diff_hunk": "@@ -5,3 +5,9 @@ ...",
+      "ai_lines_added": 8,
+      "ai_lines_removed": 1,
+      "ts": 1748000100,
+      "distance": 0.142
+    }
+  ]
+}
+```
+
+`distance` is cosine distance [0, 2]. Lower means more similar. Only records with non-null `embedding` column are returned.
+
+### Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | `embedding` missing, not 384-dimensional, or `limit` > 50 |
+| 403 | Missing or invalid `X-Admin-Key` |
+| 501 | Server not in PostgreSQL/ParadeDB mode, or no embeddings stored |

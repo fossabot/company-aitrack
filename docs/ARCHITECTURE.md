@@ -229,6 +229,30 @@ Reference script: `server-java/src/main/resources/db-postgres-init.sql`.
 
 `docker/docker-compose.yml` now includes a `db` service (`paradedb/paradedb:latest`) with a `pgdata` named volume and a `pg_isready` healthcheck. The existing Java and Go server services are unchanged (still default to H2/SQLite); opt in to postgres mode via environment variables.
 
+### Phase DB-3 — Semantic Search API (Delivered)
+
+**Status**: Both endpoints implemented in Java and Go. Embeddings are null until a backfill is run.
+
+#### `GET /edits/search` — BM25 full-text search
+
+Uses ParadeDB `|||` operator against `diff_hunk` and `prompt_summary`. Results ranked by `paradedb.score(id)`.
+
+Both Java (`EditSearchService.searchBm25`) and Go (`SearchHandler`) build the query dynamically with optional `token_key`/`repo` filters and return `{"query", "total", "hits"}`.
+
+#### `POST /edits/similar` — pgvector HNSW ANN
+
+Accepts a 384-dim query vector, casts to `vector` type, and orders by `embedding <=> CAST($1 AS vector)` cosine distance. Only rows with `embedding IS NOT NULL` are considered.
+
+Returns `{"hits": [..., "distance": float]}` where `distance` is in [0, 2] (lower = more similar).
+
+#### H2 / SQLite fallback
+
+Both handlers check `isPostgres()` / `isPostgres` flag at request time and return HTTP 501 when running against embedded databases.
+
+#### Embedding backfill
+
+Embeddings are not populated automatically. To enable ANN search, run the backfill script (`scripts/backfill_embeddings.py`, Phase DB-3.8) or populate `embedding` column directly from the client's sqlite-vec export.
+
 ---
 
 ### 语义检索扩展
