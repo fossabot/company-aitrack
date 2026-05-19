@@ -27,15 +27,8 @@ pub enum Command {
     Heartbeat,
     /// Hook callback: reads stdin JSON and records a user prompt
     PromptCapture(PromptCaptureArgs),
-    /// Check for and install updates.
-    Update {
-        /// Only check for updates, do not install.
-        #[arg(long)]
-        check_only: bool,
-        /// Force update even if already on latest version.
-        #[arg(long)]
-        force: bool,
-    },
+    /// Check for and install the latest release (verifies ed25519 signature)
+    Update,
 }
 
 #[derive(Args)]

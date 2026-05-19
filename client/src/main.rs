@@ -5,11 +5,13 @@ use aitrack::cli::Cli;
 async fn main() {
     // prompt-capture is invoked silently by hooks — skip banner to avoid
     // polluting hook stdout with decoration.
-    let is_prompt_capture = std::env::args()
-        .nth(1)
-        .map(|a| a == "prompt-capture")
+    // update also skips the banner so progress output is clean.
+    let first_arg = std::env::args().nth(1);
+    let skip_banner = first_arg
+        .as_deref()
+        .map(|a| a == "prompt-capture" || a == "update")
         .unwrap_or(false);
-    if !is_prompt_capture {
+    if !skip_banner {
         aitrack::print_banner();
     }
 

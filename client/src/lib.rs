@@ -43,7 +43,6 @@ pub fn print_banner() {
         "━".repeat(45)
     );
 }
-
 use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
 use db::{
     clean_all, clean_synced, inspect_records, insert_prompt_context, get_recent_prompt, open_db,
@@ -62,9 +61,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Command::Clean(args) => handle_clean(args)?,
         Command::Heartbeat => handle_heartbeat().await?,
         Command::PromptCapture(args) => handle_prompt_capture(args).await?,
-        Command::Update { check_only, force } => {
-            update::run_update(&update::UpdateArgs { check_only, force })?;
-        }
+        Command::Update => update::run_update()?,
     }
     Ok(())
 }
