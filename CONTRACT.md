@@ -304,3 +304,110 @@ On adapter parse failure: write a local log line (hardening point H6, do NOT sil
 | H6 | Parse failure logging | No silent swallowing of adapter errors |
 | H7 | repo_url whitelist (enforce=true) | Prevents repo spoofing |
 | H8 | file_path plausibility check (no `..`) | Prevents path injection |
+
+---
+
+## 4. Semantic Search Endpoints (Phase DB-3)
+
+These endpoints are active only when the server runs in PostgreSQL/ParadeDB mode (`SPRING_PROFILES_ACTIVE=postgres` for Java; `DATABASE_URL` set for Go). Both return **HTTP 501 Not Implemented** when using embedded H2/SQLite.
+
+Auth: **`X-Admin-Key`** header (same as `/admin/**` endpoints).
+
+---
+
+### 4.1 `GET /api/v1/ai-track/edits/search` — BM25 Full-Text Search
+
+Search edit records by relevance using ParadeDB BM25 full-text index on `diff_hunk` and `prompt_summary`.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `q` | string | ✓ | Search query text |
+| `limit` | int | ✗ | Max results (default: 20, max: 100) |
+| `token_key` | string | ✗ | Filter to a specific developer token |
+| `repo` | string | ✗ | Filter to a specific repository |
+
+**Response `200 OK`**
+
+```json
+{
+  "query": "refactor authentication",
+  "total": 3,
+  "results": [
+    {
+      "record_id": "abc123",
+      "token_key": "tk_xxxx",
+      "repo": "my-org/backend",
+      "file_path": "src/auth/handler.go",
+      "diff_hunk": "@@ -10,5 +10,8 @@ ...",
+      "ai_lines_added": 12,
+      "ai_lines_removed": 3,
+      "ts": 1748000000,
+      "score": 0.8734
+    }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | `q` is missing or empty |
+| 403 | Missing or invalid `X-Admin-Key` |
+| 501 | Server running in embedded DB mode (H2/SQLite) |
+
+---
+
+### 4.2 `POST /api/v1/ai-track/edits/similar` — Vector ANN Similarity Search
+
+Find edit records semantically similar to a given embedding vector using pgvector HNSW cosine distance.
+
+**Request Body**
+
+```json
+{
+  "embedding": [0.023, -0.147, 0.891, "..."],
+  "limit": 10,
+  "token_key": "tk_xxxx",
+  "repo": "my-org/backend"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `embedding` | float[] | ✓ | 384-dimensional query vector (all-MiniLM-L6-v2 space) |
+| `limit` | int | ✗ | Max results (default: 10, max: 50) |
+| `token_key` | string | ✗ | Filter to a specific developer token |
+| `repo` | string | ✗ | Filter to a specific repository |
+
+**Response `200 OK`**
+
+```json
+{
+  "results": [
+    {
+      "record_id": "def456",
+      "token_key": "tk_xxxx",
+      "repo": "my-org/backend",
+      "file_path": "src/auth/middleware.go",
+      "diff_hunk": "@@ -5,3 +5,9 @@ ...",
+      "ai_lines_added": 8,
+      "ai_lines_removed": 1,
+      "ts": 1748000100,
+      "distance": 0.142
+    }
+  ]
+}
+```
+
+`distance` is cosine distance in [0, 2] — lower means more similar.
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | `embedding` missing, wrong dimension (must be 384), or `limit` > 50 |
+| 403 | Missing or invalid `X-Admin-Key` |
+| 501 | Server running in embedded DB mode, or no embeddings stored yet |
