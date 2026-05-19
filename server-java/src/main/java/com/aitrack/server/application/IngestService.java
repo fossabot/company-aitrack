@@ -6,13 +6,12 @@ import com.aitrack.server.domain.model.EditDto;
 import com.aitrack.server.domain.model.EditQueryResult;
 import com.aitrack.server.domain.model.EditRecordView;
 import com.aitrack.server.domain.model.EditRecordEntity;
+import com.aitrack.server.domain.model.PageResult;
 import com.aitrack.server.domain.model.TokenEntity;
 import com.aitrack.server.domain.port.EditRecordPort;
 import com.aitrack.server.domain.service.EditValidator;
 import com.aitrack.server.domain.service.ValidationService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +26,7 @@ public class IngestService {
 
     private final ValidationService validationService;
     private final EditValidator editValidator;
-    private final EditRecordPort editRecordRepository;
+    private final EditRecordPort editRecordPort;
 
     @Transactional
     public EditBatchResponse ingest(TokenEntity token, EditBatchRequest request) {
@@ -68,15 +67,15 @@ public class IngestService {
         return new EditBatchResponse(acceptedCount, rejected, flagged);
     }
 
-    public EditQueryResult queryEdits(String tokenKey, String repoUrl, Pageable pageable) {
-        Page<EditRecordEntity> page = editRecordRepository.findByFilters(tokenKey, repoUrl, pageable);
-        List<EditRecordView> records = page.getContent().stream()
+    public EditQueryResult queryEdits(String tokenKey, String repoUrl, int page, int size) {
+        PageResult<EditRecordEntity> result = editRecordPort.findByFilters(tokenKey, repoUrl, page, size);
+        List<EditRecordView> records = result.content().stream()
                 .map(EditRecordView::from)
                 .collect(Collectors.toList());
         return new EditQueryResult(
-                page.getTotalElements(),
-                page.getNumber(),
-                page.getSize(),
+                result.totalElements(),
+                page,
+                size,
                 records
         );
     }
@@ -106,6 +105,6 @@ public class IngestService {
         entity.setStatus(status);
         entity.setFlags(flags.isEmpty() ? null : String.join(",", flags));
         entity.setReceivedAt(Instant.now());
-        editRecordRepository.save(entity);
+        editRecordPort.save(entity);
     }
 }

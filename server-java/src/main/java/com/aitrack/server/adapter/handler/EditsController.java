@@ -73,11 +73,7 @@ public class EditsController {
     ) {
         // Auth: token must be valid, but no signature required for GET
         authHelper.resolveToken(httpRequest);
-        var pageable = org.springframework.data.domain.PageRequest.of(
-            Math.max(0, page), Math.min(100, Math.max(1, size)),
-            org.springframework.data.domain.Sort.by("receivedAt").descending()
-        );
-        EditQueryResult result = ingestService.queryEdits(token_key, repo, pageable);
+        EditQueryResult result = ingestService.queryEdits(token_key, repo, Math.max(0, page), Math.min(100, Math.max(1, size)));
         return ResponseEntity.ok(result);
     }
 }

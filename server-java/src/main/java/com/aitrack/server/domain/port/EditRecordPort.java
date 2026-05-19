@@ -1,8 +1,7 @@
 package com.aitrack.server.domain.port;
 
 import com.aitrack.server.domain.model.EditRecordEntity;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import com.aitrack.server.domain.model.PageResult;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,8 +13,9 @@ import java.util.List;
  * The {@code adapter.db.EditRecordRepository} Spring Data interface provides the
  * concrete implementation; domain and application code depend only on this port.
  *
- * <p>{@link Page}/{@link Pageable} are framework-neutral pagination abstractions
- * and are kept in the port signature so the query contract is preserved verbatim.
+ * <p>Pagination is expressed with plain {@code int page} / {@code int size} primitives
+ * rather than {@code org.springframework.data.domain.Pageable} to prevent Spring Data
+ * infrastructure types from leaking into the domain layer.
  */
 public interface EditRecordPort {
 
@@ -26,7 +26,7 @@ public interface EditRecordPort {
     long countByTokenKeyAndFilePathSince(String tokenKey, String filePath, Instant since);
 
     /** Returns a page of records optionally filtered by token key and repo URL. */
-    Page<EditRecordEntity> findByFilters(String tokenKey, String repoUrl, Pageable pageable);
+    PageResult<EditRecordEntity> findByFilters(String tokenKey, String repoUrl, int page, int size);
 
     /** Loads all non-rejected records for a token, excluding the given status. */
     List<EditRecordEntity> findByTokenKeyAndStatusNot(String tokenKey, EditRecordEntity.RecordStatus status);

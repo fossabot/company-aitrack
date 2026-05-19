@@ -1,9 +1,12 @@
 package com.aitrack.server.adapter.db;
 
 import com.aitrack.server.domain.model.EditRecordEntity;
+import com.aitrack.server.domain.model.PageResult;
 import com.aitrack.server.domain.port.EditRecordPort;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +17,10 @@ import java.util.List;
 
 /**
  * Spring Data JPA persistence adapter implementing {@link EditRecordPort}.
+ *
+ * <p>Spring Data's {@link Page} and {@link Pageable} are confined to this adapter.
+ * The port-facing method {@link #findByFilters} converts the internal {@code Page}
+ * into the framework-agnostic {@link PageResult} before returning.
  */
 @Repository
 public interface EditRecordRepository extends JpaRepository<EditRecordEntity, Long>, EditRecordPort {
@@ -35,11 +42,23 @@ public interface EditRecordRepository extends JpaRepository<EditRecordEntity, Lo
     Page<EditRecordEntity> findByRepoUrl(String repoUrl, Pageable pageable);
 
     @Query("SELECT e FROM EditRecordEntity e WHERE (:tokenKey IS NULL OR e.tokenKey = :tokenKey) AND (:repoUrl IS NULL OR e.repoUrl = :repoUrl)")
-    Page<EditRecordEntity> findByFilters(
+    Page<EditRecordEntity> findByFiltersInternal(
         @Param("tokenKey") String tokenKey,
         @Param("repoUrl") String repoUrl,
         Pageable pageable
     );
+
+    /** Implements the port method; converts Spring {@link Page} to framework-agnostic {@link PageResult}. */
+    @Override
+    default PageResult<EditRecordEntity> findByFilters(String tokenKey, String repoUrl, int page, int size) {
+        Pageable pageable = PageRequest.of(
+            Math.max(0, page),
+            Math.min(100, Math.max(1, size)),
+            Sort.by("receivedAt").descending()
+        );
+        Page<EditRecordEntity> springPage = findByFiltersInternal(tokenKey, repoUrl, pageable);
+        return new PageResult<>(springPage.getContent(), springPage.getTotalElements());
+    }
 
     // Stats aggregation queries
     @Query("SELECT e.tokenKey, COUNT(e), SUM(e.addedLines), SUM(e.removedLines), " +

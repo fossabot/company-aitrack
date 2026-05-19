@@ -21,7 +21,7 @@ public class ValidationService {
 
     private final SignatureService signatureService;
     private final DiffConsistencyService diffConsistencyService;
-    private final EditRecordPort editRecordRepository;
+    private final EditRecordPort editRecordPort;
     private final ValidationPolicy policy;
 
     public enum EditOutcome { ACCEPTED, FLAGGED, REJECTED }
@@ -89,7 +89,7 @@ public class ValidationService {
 
         // Step 9: rate limiting
         Instant windowStart = Instant.now().minusSeconds(3600);
-        long count = editRecordRepository.countByTokenKeyAndFilePathSince(
+        long count = editRecordPort.countByTokenKeyAndFilePathSince(
             token.getTokenKey(), edit.getFilePath(), windowStart);
         if (count >= policy.rateLimitPerHour()) {
             return new ValidationResult(EditOutcome.REJECTED, List.of("rate_limited"));

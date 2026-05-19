@@ -17,15 +17,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StatsService {
 
-    private final EditRecordPort editRecordRepository;
+    private final EditRecordPort editRecordPort;
     private final DevicePort deviceRepository;
 
     public List<StatsRow> getStats(String groupBy) {
         List<Object[]> rows = switch (groupBy) {
-            case "repo" -> editRecordRepository.aggregateByRepo();
-            case "device" -> editRecordRepository.aggregateByDevice();
-            case "hostname" -> editRecordRepository.aggregateByHostname();
-            default -> editRecordRepository.aggregateByTokenKey();
+            case "repo" -> editRecordPort.aggregateByRepo();
+            case "device" -> editRecordPort.aggregateByDevice();
+            case "hostname" -> editRecordPort.aggregateByHostname();
+            default -> editRecordPort.aggregateByTokenKey();
         };
 
         return rows.stream()
