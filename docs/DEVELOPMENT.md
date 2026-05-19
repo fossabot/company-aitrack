@@ -55,15 +55,26 @@ cargo llvm-cov --open
 | `adapters/cursor.rs` | 8 | 100% |
 | `config.rs` | 17 | 83.9% |
 | `crypto.rs` | 13 | 100% |
-| `db.rs` | 15 | 91.7% |
+| `db/` | 18 | 91.7% |
 | `diff.rs` | 12 | 100% |
 | `git.rs` | 4 | 97.2% |
 | `heartbeat.rs` | 9 | 97.4% |
 | `init.rs` | 23 | 95.1% |
 | `uploader.rs` | 12 | 99.0% |
-| **TOTAL** | **140** | **87.75% 行 / 90.24% 函数** |
+| **TOTAL** | **143** | **87.75% 行 / 90.24% 函数** |
 
 测试均为 `#[cfg(test)]` 内联模块。HTTP mock 使用 `wiremock`，临时文件使用 `tempfile`。
+
+#### sqlite-vec (optional vector extension)
+
+The `client/src/db/vec.rs` module registers sqlite-vec via `sqlite3_auto_extension` at DB-open time. If the extension probe (`SELECT vec_version()`) fails, the `VEC_DISABLED` global is set and all vector operations are skipped — the core capture pipeline is unaffected.
+
+To verify sqlite-vec loaded correctly:
+```bash
+./target/debug/aitrack status   # logs "sqlite-vec loaded: v0.1.x" at DEBUG level
+```
+
+The `vec_records` virtual table (`vec0`, `float[384]`) is created automatically when vec is enabled. Embeddings are not populated until Phase DB-3.
 
 ### Testkit 工厂
 
@@ -103,6 +114,13 @@ mvn spring-boot:run
 ```
 
 JaCoCo HTML 报告：`target/site/jacoco/index.html`
+
+#### PostgreSQL / ParadeDB profile
+
+```bash
+# Run with postgres profile (requires ParadeDB running on localhost:5432)
+SPRING_PROFILES_ACTIVE=postgres mvn spring-boot:run
+```
 
 ### 通过 Docker 构建（无本机 JDK 时）
 
@@ -166,6 +184,14 @@ bad := testkit.TamperedEditDTO()
 exp := testkit.ExpiredTimestampEditDTO()
 big := testkit.OversizedEditDTO()
 ```
+
+#### ParadeDB local dev
+
+To run the Go server against a local ParadeDB instance:
+```bash
+DATABASE_URL=postgres://aitrack:aitrack_secret@localhost:5432/aitrack go run .
+```
+Without `DATABASE_URL`, the server falls back to embedded SQLite (default for local dev).
 
 ---
 
