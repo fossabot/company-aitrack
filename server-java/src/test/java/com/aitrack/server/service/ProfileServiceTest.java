@@ -416,6 +416,33 @@ class ProfileServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 16: classifyPrompt — Chinese generate keyword
+    // -------------------------------------------------------------------------
+
+    @Test
+    void classifyPrompt_chineseGenerate_returnsGenerate() {
+        assertThat(profileService.classifyPrompt("帮我生成一个 REST API")).isEqualTo("generate");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 17: classifyPrompt — Chinese fix_debug keyword
+    // -------------------------------------------------------------------------
+
+    @Test
+    void classifyPrompt_chineseFixDebug_returnsFixDebug() {
+        assertThat(profileService.classifyPrompt("修复这个错误")).isEqualTo("fix_debug");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 18: classifyPrompt — Chinese test keyword
+    // -------------------------------------------------------------------------
+
+    @Test
+    void classifyPrompt_chineseTest_returnsTest() {
+        assertThat(profileService.classifyPrompt("写单元测试")).isEqualTo("test");
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

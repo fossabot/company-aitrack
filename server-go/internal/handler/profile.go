@@ -248,6 +248,36 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 	return dto, nil
 }
 
+var promptKeywords = map[string][]string{
+	"generate":  {"generate", "create", "write", "implement", "add", "build", "make", "生成", "创建", "新增", "写", "实现", "构建"},
+	"fix_debug": {"fix", "bug", "error", "debug", "issue", "wrong", "broken", "修复", "错误", "调试", "修", "问题", "故障", "报错"},
+	"refactor":  {"refactor", "clean", "improve", "optimize", "restructure", "重构", "优化", "改进", "简化", "整理"},
+	"explain":   {"explain", "what", "how", "why", "describe", "解释", "什么", "怎么", "为什么", "说明"},
+	"test":      {"test", "spec", "mock", "coverage", "unit", "测试", "单元测试", "集成测试", "断言", "覆盖"},
+}
+
+// classifyPrompt returns the category for a prompt summary.
+// Priority: fix_debug > test > refactor > explain > generate > other
+func classifyPrompt(s string) string {
+	lower := strings.ToLower(s)
+	if matchesAny(lower, promptKeywords["fix_debug"]...) {
+		return "fix_debug"
+	}
+	if matchesAny(lower, promptKeywords["test"]...) {
+		return "test"
+	}
+	if matchesAny(lower, promptKeywords["refactor"]...) {
+		return "refactor"
+	}
+	if matchesAny(lower, promptKeywords["explain"]...) {
+		return "explain"
+	}
+	if matchesAny(lower, promptKeywords["generate"]...) {
+		return "generate"
+	}
+	return "other"
+}
+
 // ComputePromptPatterns classifies prompt_summary text into intent categories.
 func ComputePromptPatterns(records []RawRecord) map[string]int64 {
 	patterns := map[string]int64{
@@ -262,21 +292,7 @@ func ComputePromptPatterns(records []RawRecord) map[string]int64 {
 		if r.PromptSummary == nil || *r.PromptSummary == "" {
 			continue
 		}
-		lower := strings.ToLower(*r.PromptSummary)
-		switch {
-		case matchesAny(lower, "generate", "create", "write", "implement", "add"):
-			patterns["generate"]++
-		case matchesAny(lower, "fix", "debug", "error", "bug", "broken", "failing"):
-			patterns["fix_debug"]++
-		case matchesAny(lower, "refactor", "clean", "improve", "reorganize", "rename"):
-			patterns["refactor"]++
-		case matchesAny(lower, "explain", "what", "how", "why", "understand", "describe"):
-			patterns["explain"]++
-		case matchesAny(lower, "test", "spec", "mock", "assert", "verify"):
-			patterns["test"]++
-		default:
-			patterns["other"]++
-		}
+		patterns[classifyPrompt(*r.PromptSummary)]++
 	}
 	return patterns
 }

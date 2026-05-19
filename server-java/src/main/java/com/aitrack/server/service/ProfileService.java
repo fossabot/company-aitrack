@@ -295,6 +295,35 @@ public class ProfileService {
     // Prompt pattern classification
     // -------------------------------------------------------------------------
 
+    private static final Map<String, List<String>> PROMPT_KEYWORDS = Map.of(
+        "generate",  List.of("generate", "create", "write", "implement", "add", "build", "make",
+                              "生成", "创建", "新增", "写", "实现", "构建"),
+        "fix_debug", List.of("fix", "bug", "error", "debug", "issue", "wrong", "broken",
+                              "修复", "错误", "调试", "修", "问题", "故障", "报错"),
+        "refactor",  List.of("refactor", "clean", "improve", "optimize", "restructure",
+                              "重构", "优化", "改进", "简化", "整理"),
+        "explain",   List.of("explain", "what", "how", "why", "describe",
+                              "解释", "什么", "怎么", "为什么", "说明"),
+        "test",      List.of("test", "spec", "mock", "coverage", "unit",
+                              "测试", "单元测试", "集成测试", "断言", "覆盖"),
+        "other",     List.of()
+    );
+
+    /**
+     * Classifies a prompt summary string into an intent category.
+     * Priority order: fix_debug > test > refactor > explain > generate > other
+     */
+    String classifyPrompt(String prompt) {
+        if (prompt == null || prompt.isBlank()) return "other";
+        String lower = prompt.toLowerCase();
+        if (PROMPT_KEYWORDS.get("fix_debug").stream().anyMatch(lower::contains)) return "fix_debug";
+        if (PROMPT_KEYWORDS.get("test").stream().anyMatch(lower::contains))      return "test";
+        if (PROMPT_KEYWORDS.get("refactor").stream().anyMatch(lower::contains))  return "refactor";
+        if (PROMPT_KEYWORDS.get("explain").stream().anyMatch(lower::contains))   return "explain";
+        if (PROMPT_KEYWORDS.get("generate").stream().anyMatch(lower::contains))  return "generate";
+        return "other";
+    }
+
     private Map<String, Long> computePromptPatterns(List<EditRecordEntity> records) {
         Map<String, Long> patterns = new java.util.LinkedHashMap<>();
         patterns.put("generate", 0L);
@@ -307,20 +336,7 @@ public class ProfileService {
         for (EditRecordEntity r : records) {
             String ps = r.getPromptSummary();
             if (ps == null || ps.isBlank()) continue;
-            String lower = ps.toLowerCase();
-            if (lower.matches(".*(generate|create|write|implement|add).*")) {
-                patterns.merge("generate", 1L, Long::sum);
-            } else if (lower.matches(".*(fix|debug|error|bug|broken|failing).*")) {
-                patterns.merge("fix_debug", 1L, Long::sum);
-            } else if (lower.matches(".*(refactor|clean|improve|reorganize|rename).*")) {
-                patterns.merge("refactor", 1L, Long::sum);
-            } else if (lower.matches(".*(explain|what|how|why|understand|describe).*")) {
-                patterns.merge("explain", 1L, Long::sum);
-            } else if (lower.matches(".*(test|spec|mock|assert|verify).*")) {
-                patterns.merge("test", 1L, Long::sum);
-            } else {
-                patterns.merge("other", 1L, Long::sum);
-            }
+            patterns.merge(classifyPrompt(ps), 1L, Long::sum);
         }
         return patterns;
     }

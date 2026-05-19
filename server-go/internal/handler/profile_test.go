@@ -382,6 +382,42 @@ func TestComputePromptPatterns(t *testing.T) {
 			t.Errorf("other = %d, want 1", patterns["other"])
 		}
 	})
+
+	t.Run("Chinese generate keyword matches", func(t *testing.T) {
+		ps := "帮我生成一个 REST API"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["generate"] != 1 {
+			t.Errorf("generate = %d, want 1", patterns["generate"])
+		}
+		if patterns["other"] != 0 {
+			t.Errorf("other = %d, want 0", patterns["other"])
+		}
+	})
+
+	t.Run("Chinese fix_debug keyword matches", func(t *testing.T) {
+		ps := "修复这个错误"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["fix_debug"] != 1 {
+			t.Errorf("fix_debug = %d, want 1", patterns["fix_debug"])
+		}
+		if patterns["other"] != 0 {
+			t.Errorf("other = %d, want 0", patterns["other"])
+		}
+	})
+
+	t.Run("Chinese test keyword matches", func(t *testing.T) {
+		ps := "写单元测试"
+		records := []handler.RawRecord{{PromptSummary: &ps}}
+		patterns := handler.ComputePromptPatterns(records)
+		if patterns["test"] != 1 {
+			t.Errorf("test = %d, want 1", patterns["test"])
+		}
+		if patterns["other"] != 0 {
+			t.Errorf("other = %d, want 0", patterns["other"])
+		}
+	})
 }
 
 // ─── computeCommentDensity unit tests ──────────────────────────────────────
