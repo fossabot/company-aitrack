@@ -1,3 +1,4 @@
+pub mod keyword_store;
 pub mod models;
 pub mod queries;
 pub mod schema;

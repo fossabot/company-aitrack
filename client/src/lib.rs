@@ -4,6 +4,7 @@ pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod diff;
+pub mod domain;
 pub mod git;
 pub mod heartbeat;
 pub mod init;
@@ -30,6 +31,17 @@ pub(crate) mod test_support {
 use anyhow::Result;
 
 use cli::{Cli, Command};
+
+/// Print the ASCII startup banner.
+/// This is skipped automatically for `prompt-capture` (called silently by hooks).
+pub fn print_banner() {
+    let version = env!("CARGO_PKG_VERSION");
+    println!(
+        "\n   _   ___ _____ ____      _    ____ _  __\n  / \\ |_ _|_   _|  _ \\    / \\  / ___| |/ /\n / _ \\ | |  | | | |_) |  / _ \\| |   | ' /\n/ ___ \\| |  | | |  _ <  / ___ \\ |___| . \\\n/_/   \\_\\___| |_| |_| \\_\\/_/   \\_\\____|_|\\_\\\n\n  AI Coding Usage Tracker  \u{00B7}  v{version}\n  \u{00A9} 2026 MapleEve  \u{00B7}  Apache-2.0\n  https://github.com/MapleEve/company-aitrack\n{}",
+        "━".repeat(45)
+    );
+}
+
 use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
 use db::{
     clean_all, clean_synced, inspect_records, insert_prompt_context, get_recent_prompt, open_db,
@@ -83,6 +95,15 @@ async fn handle_init(args: cli::InitArgs) -> Result<()> {
         .unwrap_or_else(|_| "aitrack".to_string());
 
     install_hooks(&tools, &aitrack_bin, &home)?;
+
+    // Initialize the keyword store after hook installation.
+    // Failure is non-fatal — keyword integrity is best-effort.
+    {
+        let kw_path = config::config_dir().join("keywords.db");
+        if let Err(e) = db::keyword_store::open_keyword_store(&kw_path) {
+            eprintln!("[aitrack] keyword store init warning: {e}");
+        }
+    }
 
     let (claude, codex, cursor) = detect_tool_statuses(&home);
     println!("Hook installation complete:");
@@ -392,8 +413,13 @@ async fn handle_prompt_capture(args: cli::PromptCaptureArgs) -> Result<()> {
         return Ok(());
     }
 
+    // Classify the prompt and prepend the category tag so downstream queries
+    // can filter/group without re-parsing the raw text.
+    let category = domain::keywords::classify_prompt(prompt);
+    let tagged = format!("[{}] {}", category.as_str(), prompt);
+
     let conn = open_db()?;
-    insert_prompt_context(&conn, session_id, prompt)?;
+    insert_prompt_context(&conn, session_id, &tagged)?;
     Ok(())
 }
 
