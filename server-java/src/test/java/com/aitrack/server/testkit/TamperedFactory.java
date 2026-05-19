@@ -1,8 +1,8 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.dto.EditBatchRequest;
-import com.aitrack.server.dto.EditDto;
-import com.aitrack.server.service.SignatureService;
+import com.aitrack.server.domain.model.EditBatchRequest;
+import com.aitrack.server.domain.model.EditDto;
+import com.aitrack.server.domain.service.SignatureService;
 
 import java.util.List;
 

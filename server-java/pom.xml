@@ -149,11 +149,11 @@
                             </rules>
                             <!-- Exclude bootstrap/config classes and pure data-mapping DTOs -->
                             <excludes>
-                                <exclude>com/aitrack/server/AiTrackServerApplication.class</exclude>
-                                <exclude>com/aitrack/server/config/WebConfig.class</exclude>
+                                <exclude>com/aitrack/server/infrastructure/config/AiTrackServerApplication.class</exclude>
+                                <exclude>com/aitrack/server/infrastructure/config/WebConfig.class</exclude>
                                 <!-- Read-side view DTOs: no branching logic, covered by integration tests -->
-                                <exclude>com/aitrack/server/dto/EditQueryResult.class</exclude>
-                                <exclude>com/aitrack/server/dto/EditRecordView.class</exclude>
+                                <exclude>com/aitrack/server/domain/model/EditQueryResult.class</exclude>
+                                <exclude>com/aitrack/server/domain/model/EditRecordView.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

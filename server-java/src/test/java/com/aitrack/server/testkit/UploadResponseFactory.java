@@ -1,6 +1,6 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.dto.EditBatchResponse;
+import com.aitrack.server.domain.model.EditBatchResponse;
 
 import java.util.List;
 

@@ -1,7 +1,7 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.dto.EditBatchRequest;
-import com.aitrack.server.dto.EditDto;
+import com.aitrack.server.domain.model.EditBatchRequest;
+import com.aitrack.server.domain.model.EditDto;
 
 import java.util.List;
 import java.util.function.Consumer;

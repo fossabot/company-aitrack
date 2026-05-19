@@ -1,6 +1,6 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.dto.HeartbeatRequest;
+import com.aitrack.server.domain.model.HeartbeatRequest;
 
 import java.util.function.Consumer;
 

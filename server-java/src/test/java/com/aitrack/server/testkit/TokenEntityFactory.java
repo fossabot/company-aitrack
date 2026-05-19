@@ -1,6 +1,6 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.entity.TokenEntity;
+import com.aitrack.server.domain.model.TokenEntity;
 
 import java.time.Instant;
 import java.util.function.Consumer;

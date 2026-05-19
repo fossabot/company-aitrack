@@ -1,0 +1,56 @@
+package com.aitrack.server.adapter.handler;
+
+import com.aitrack.server.application.TokenService;
+import com.aitrack.server.domain.model.CreateTokenRequest;
+import com.aitrack.server.domain.model.CreateTokenResponse;
+import com.aitrack.server.infrastructure.config.AiTrackProperties;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+@RestController
+@RequestMapping("/admin")
+@RequiredArgsConstructor
+public class AdminTokenController {
+
+    private final TokenService tokenService;
+    private final AiTrackProperties props;
+
+    /**
+     * Issues a new token. Requires X-Admin-Key header matching aitrack.admin-key.
+     * Set aitrack.admin-key (or AITRACK_ADMIN_KEY env var) before deployment.
+     */
+    @PostMapping("/tokens")
+    public ResponseEntity<CreateTokenResponse> createToken(
+        HttpServletRequest httpRequest,
+        @Valid @RequestBody CreateTokenRequest request
+    ) {
+        verifyAdminKey(httpRequest);
+        CreateTokenResponse response = tokenService.createToken(request);
+        return ResponseEntity.ok(response);
+    }
+
+    private void verifyAdminKey(HttpServletRequest request) {
+        String configuredKey = props.getAdminKey();
+        if (configuredKey == null || configuredKey.isBlank()) {
+            // Admin key not configured — refuse all access until it is set.
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "admin-key is not configured; set aitrack.admin-key before using this endpoint");
+        }
+        String provided = request.getHeader("X-Admin-Key");
+        if (provided == null || !constantTimeEquals(configuredKey, provided.trim())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "invalid X-Admin-Key");
+        }
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) return false;
+        byte[] aBytes = a.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bBytes = b.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return java.security.MessageDigest.isEqual(aBytes, bBytes);
+    }
+}

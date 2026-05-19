@@ -1,6 +1,6 @@
 package com.aitrack.server.testkit;
 
-import com.aitrack.server.dto.CreateTokenRequest;
+import com.aitrack.server.domain.model.CreateTokenRequest;
 
 import java.util.function.Consumer;
 
