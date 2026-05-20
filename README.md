@@ -1,34 +1,39 @@
-# company-aitrack
+<sub>🌐 <b>简体中文</b> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></sub>
 
-<p align="center">
-  <a href="https://github.com/MapleEve/company-aitrack/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/MapleEve/company-aitrack/ci.yml?branch=main&style=flat-square&label=CI&logo=githubactions&logoColor=white" alt="CI" />
-  </a>
-  <a href="https://codecov.io/gh/MapleEve/company-aitrack">
-    <img src="https://img.shields.io/codecov/c/github/MapleEve/company-aitrack?style=flat-square&logo=codecov&logoColor=white" alt="Codecov" />
-  </a>
-  <a href="https://github.com/MapleEve/company-aitrack/releases">
-    <img src="https://img.shields.io/github/v/release/MapleEve/company-aitrack?style=flat-square&logo=github" alt="Release" />
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/MapleEve/company-aitrack?style=flat-square" alt="License" />
-  </a>
-  <a href="docs/DEPLOYMENT.md">
-    <img src="https://img.shields.io/badge/self--hosting-first-blue?style=flat-square&logo=docker&logoColor=white" alt="Self-hosting first" />
-  </a>
-</p>
+<div align="center">
 
-**简体中文** | [English](README.en.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+# aitrack 🛡️
 
----
+> *「把 AI 编码行为纳入可信审计，还给研发效能团队一份真实数据。」*
+
+<a href="https://github.com/MapleEve/company-aitrack/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MapleEve/company-aitrack/ci.yml?branch=main&style=flat-square&label=CI&logo=githubactions&logoColor=white" alt="CI" /></a>
+<a href="https://codecov.io/gh/MapleEve/company-aitrack"><img src="https://img.shields.io/codecov/c/github/MapleEve/company-aitrack?style=flat-square&logo=codecov&logoColor=white" alt="Codecov" /></a>
+<a href="https://github.com/MapleEve/company-aitrack/releases"><img src="https://img.shields.io/github/v/release/MapleEve/company-aitrack?style=flat-square&logo=github" alt="Release" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/MapleEve/company-aitrack?style=flat-square" alt="License" /></a>
+<a href="docs/DEPLOYMENT.md"><img src="https://img.shields.io/badge/self--hosting-first-blue?style=flat-square&logo=docker&logoColor=white" alt="Self-hosting first" /></a>
+
+<br>
+<br>
 
 <img src="./docs/assets/readme/hero.zh-CN.png" alt="aitrack hero" width="100%" />
+
+<br>
+
+aitrack 为 Claude Code、Codex CLI、Cursor 等 AI 编码工具安装轻量钩子，<br>在每次编辑事件发生时生成带 HMAC 签名的记录，<br>通过 10 步服务端校验链过滤噪声与篡改，<br>让研发效能团队获得一份可信、可查、可量化的 AI 使用数据。
+
+<br>
+
+[快速开始](#快速开始) · [架构](#架构) · [部署](docs/DEPLOYMENT.md) · [API](docs/API.md) · [贡献](CONTRIBUTING.md)
+
+</div>
 
 ---
 
 ## 问题
 
-<img src="./docs/assets/readme/problem.zh-CN.png" alt="问题" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/problem.zh-CN.png" alt="问题" width="100%" />
+</p>
 
 AI 编码工具（Claude Code、Codex CLI、Cursor）大规模进入研发团队，带来了三个难以回避的治理挑战：
 
@@ -42,7 +47,9 @@ AI 编码工具（Claude Code、Codex CLI、Cursor）大规模进入研发团队
 
 ## 适合谁
 
-<img src="./docs/assets/readme/audience.zh-CN.png" alt="适合谁" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/audience.zh-CN.png" alt="适合谁" width="100%" />
+</p>
 
 | 角色 | 核心需求 |
 |------|----------|
@@ -54,13 +61,13 @@ AI 编码工具（Claude Code、Codex CLI、Cursor）大规模进入研发团队
 
 ## 架构
 
-aitrack 由三个独立组件构成，通过协议 v1.2 互通；v1.3.0 新增 ParadeDB BM25 全文检索与 pgvector HNSW 语义搜索能力：
+aitrack 由三个独立组件构成，通过协议 v1.2 互通：
 
 | 组件 | 技术栈 | 职责 |
 |------|--------|------|
 | **Rust 客户端** `aitrack` | Rust · single binary · 无运行时依赖 | 安装钩子、捕获编辑事件、HMAC 签名、上报数据 |
 | **Java 服务端** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10 步校验链、可信归因、效能查询（主推实现） |
-| **Go 服务端** `aitrack-server-go` | Go 1.25 · chi v5.2.5 · SQLite / PostgreSQL | 与 Java 端功能对等的轻量备选实现；支持切换至 ParadeDB 进行语义搜索 |
+| **Go 服务端** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite / PostgreSQL | 与 Java 端功能对等的轻量备选实现 |
 
 **协议 v1.2 关键设计：**
 
@@ -73,7 +80,9 @@ aitrack 由三个独立组件构成，通过协议 v1.2 互通；v1.3.0 新增 P
 
 ## 你会得到什么
 
-<img src="./docs/assets/readme/outcomes.zh-CN.png" alt="你会得到什么" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/outcomes.zh-CN.png" alt="你会得到什么" width="100%" />
+</p>
 
 ### HMAC 可信归因
 
@@ -187,7 +196,9 @@ bash e2e/run.sh both
 
 ## 安全与隐私
 
-<img src="./docs/assets/readme/security.zh-CN.png" alt="安全与隐私" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/security.zh-CN.png" alt="安全与隐私" width="100%" />
+</p>
 
 | 机制 | 说明 |
 |------|------|
@@ -215,12 +226,6 @@ bash e2e/run.sh both
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南（提交规范、PR 流程、测试要求） |
 | [SECURITY.md](SECURITY.md) | 安全漏洞报告流程 |
-
----
-
-## License
-
-<img src="./docs/assets/readme/license.zh-CN.png" alt="License" width="100%" />
 
 ---
 

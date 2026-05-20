@@ -1,22 +1,39 @@
-# company-aitrack
+<sub>🌐 <a href="README.md">简体中文</a> · <b>English</b> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></sub>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/MapleEve/company-aitrack/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/MapleEve/company-aitrack/actions)
-[![Codecov](https://img.shields.io/codecov/c/github/MapleEve/company-aitrack?logo=codecov&logoColor=white)](https://codecov.io/gh/MapleEve/company-aitrack)
-[![Release](https://img.shields.io/github/v/release/MapleEve/company-aitrack?logo=github)](https://github.com/MapleEve/company-aitrack/releases)
-[![License](https://img.shields.io/github/license/MapleEve/company-aitrack)](LICENSE)
-[![Self-hosting first](https://img.shields.io/badge/self--hosting-first-blue?logo=docker&logoColor=white)](docs/DEPLOYMENT.md)
+<div align="center">
 
-[简体中文](README.md) | **English** | [日本語](README.ja.md) | [한국어](README.ko.md)
+# aitrack 🛡️
 
----
+> *「Bring AI coding behavior into trusted auditing — give your engineering effectiveness team real data.」*
+
+<a href="https://github.com/MapleEve/company-aitrack/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MapleEve/company-aitrack/ci.yml?branch=main&style=flat-square&label=CI&logo=githubactions&logoColor=white" alt="CI" /></a>
+<a href="https://codecov.io/gh/MapleEve/company-aitrack"><img src="https://img.shields.io/codecov/c/github/MapleEve/company-aitrack?style=flat-square&logo=codecov&logoColor=white" alt="Codecov" /></a>
+<a href="https://github.com/MapleEve/company-aitrack/releases"><img src="https://img.shields.io/github/v/release/MapleEve/company-aitrack?style=flat-square&logo=github" alt="Release" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/MapleEve/company-aitrack?style=flat-square" alt="License" /></a>
+<a href="docs/DEPLOYMENT.md"><img src="https://img.shields.io/badge/self--hosting-first-blue?style=flat-square&logo=docker&logoColor=white" alt="Self-hosting first" /></a>
+
+<br>
+<br>
 
 <img src="./docs/assets/readme/hero.en.png" alt="aitrack hero" width="100%" />
+
+<br>
+
+aitrack installs lightweight hooks into Claude Code, Codex CLI, and Cursor,<br>generating HMAC-signed records at every edit event,<br>filtering noise and tampering through a 10-step server validation chain,<br>so engineering effectiveness teams get trustworthy, auditable, quantifiable AI usage data.
+
+<br>
+
+[Quick Start](#quick-start) · [Architecture](#architecture) · [Deploy](docs/DEPLOYMENT.md) · [API](docs/API.md) · [Contribute](CONTRIBUTING.md)
+
+</div>
 
 ---
 
 ## Problem
 
-<img src="./docs/assets/readme/problem.en.png" alt="Problem" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/problem.en.png" alt="Problem" width="100%" />
+</p>
 
 AI coding tools (Claude Code, Codex CLI, Cursor) have entered engineering teams at scale, creating three governance challenges that are hard to ignore:
 
@@ -30,7 +47,9 @@ AI coding tools (Claude Code, Codex CLI, Cursor) have entered engineering teams 
 
 ## Who It's For
 
-<img src="./docs/assets/readme/audience.en.png" alt="Who It's For" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/audience.en.png" alt="Who It's For" width="100%" />
+</p>
 
 | Role | Core Need |
 |------|-----------|
@@ -48,7 +67,7 @@ aitrack consists of three independent components communicating via Protocol v1.2
 |-----------|-------|----------------|
 | **Rust client** `aitrack` | Rust · single binary · no runtime dependencies | Install hooks, capture edit events, HMAC signing, upload data |
 | **Java server** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10-step validation chain, trusted attribution, effectiveness queries (primary implementation) |
-| **Go server** `aitrack-server-go` | Go 1.25 · chi v5.2.5 · SQLite / PostgreSQL | Feature-equivalent lightweight alternative; supports ParadeDB for semantic search |
+| **Go server** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite / PostgreSQL | Feature-equivalent lightweight alternative implementation |
 
 **Protocol v1.2 key design:**
 
@@ -61,7 +80,9 @@ aitrack consists of three independent components communicating via Protocol v1.2
 
 ## What You Get
 
-<img src="./docs/assets/readme/outcomes.en.png" alt="What You Get" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/outcomes.en.png" alt="What You Get" width="100%" />
+</p>
 
 ### HMAC Trusted Attribution
 
@@ -175,7 +196,9 @@ bash e2e/run.sh both
 
 ## Security & Privacy
 
-<img src="./docs/assets/readme/security.en.png" alt="Security & Privacy" width="100%" />
+<p align="center">
+  <img src="./docs/assets/readme/security.en.png" alt="Security & Privacy" width="100%" />
+</p>
 
 | Mechanism | Description |
 |-----------|-------------|
@@ -206,8 +229,10 @@ bash e2e/run.sh both
 
 ---
 
-## License
+## Star History
 
-<img src="./docs/assets/readme/license.en.png" alt="License" width="100%" />
+[![Star History Chart](https://api.star-history.com/svg?repos=MapleEve/company-aitrack&type=date)](https://www.star-history.com/#MapleEve/company-aitrack&type=date)
+
+---
 
 [MIT License](LICENSE) © 2026 MapleEve
