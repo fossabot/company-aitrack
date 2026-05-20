@@ -1,18 +1,26 @@
-# 更新日志
+# Changelog
 
-本文档遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
+All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
 ---
 
 ## [v1.6.0] — 2026-05-20
 
+### Added
+
+- **`aitrack update` subcommand** — ed25519 signature verification against hardcoded public key; fetches latest release from GitHub Releases API, downloads binary + `.sig`, verifies signature, atomically replaces current executable; startup assertion rejects all-zero placeholder key
+- **Keyword library tamper detection** — keywords hardcoded as compile-time constants; `keyword_fingerprint()` computes SHA256 and stores in `~/.aitrack/keywords.db` (WCDB multi-DB: `records.db` + `keywords.db`); mismatch triggers warning, binary copy is authoritative
+- **`server-go/testapp` package** — exports `Build()` + `MemoryConfig(adminKey)`, bypasses Go `internal` restriction; enables E2E and integration tests to spin up a real chi router with in-memory SQLite without an external process
+- **Real-chain E2E integration tests** (`e2e/chain_integration_test.go`) — `httptest.NewServer` backed by real Go chi router + in-memory SQLite; 3 scenarios: full happy path (accepted=3), tampered `record_sig` → rejected (`sig_mismatch`), no Bearer token → 401
+- **`domain/model/PageResult<T>`** (Java) — framework-agnostic `record PageResult<T>(List<T> content, long totalElements)`, replaces Spring `Page<T>` in `EditRecordPort`; zero Spring imports in domain layer
+
 ### Changed
 
-- **Sprint 2: Hexagonal architecture refactor across all three components**
-  - Rust client: `client/src/` restructured into `domain/` (pure domain logic: model, crypto, diff, keywords), `port/` (StoragePort / UploadPort abstractions), and `adapter/` (sqlite/ + http/ + event/ implementations); legacy `adapters/` and `db/` modules retained for backward compatibility; fixed concurrent race condition via `FLAG_MUTEX: Mutex<()>` in `db/vec.rs`; 291 tests pass, ≥ 90% line coverage
-  - Go server: added `domain/port/` (EditRecordPort / HeartbeatPort / TokenPort), `application/` (IngestUsecase / ProfileUsecase / TokenUsecase), `adapter/` (db/ + handler/), and `infrastructure/` (app/ + config/) layers; added `ValidationPolicy` value object; 244 tests pass, 92.1% coverage
-  - Java server: added `domain/port/` (DevicePort / EditRecordPort / TokenPort); extracted `ValidationPolicy.java` as a pure domain value object (Spring dependency removed); 218 tests pass, LINE ≥ 90%
-  - E2E: `e2e/mock_chain_test.go` — 3 new Phase 4 mock chain tests (no real credentials required)
+- **Hexagonal architecture — fully wired across all three components (Sprint 2)**
+  - Rust client: deleted legacy `db/`, `adapters/`, `crypto.rs`, `diff.rs` shims (1 927 lines); `lib.rs` now routes through `StoragePort` (SqliteStorage) and `UploadPort` (HttpUploader); `uploader::flush_unsynced` accepts `&HttpUploader` and delegates HTTP POST to `HttpUploader::post_batch`; 233 tests pass, **90.71% line coverage**
+  - Go server: `StatsRow` moved from `domain/port` to `domain/model`; `IngestUsecase.saveEdit` now returns and propagates `error` (previously silently discarded); compile-time interface assertions (`var _ port.X = (*Y)(nil)`) on all three adapters; **95.3% total coverage**
+  - Java server: `EditRecordPort` uses `PageResult<T>` (no `org.springframework.data.domain` imports); field `editRecordRepository` renamed to `editRecordPort` in IngestService / StatsService / ValidationService; 218 tests pass, **LINE ≥ 90%**
+- **`HttpUploader::upload_batch`** — fully implemented (previously `Ok(())` stub); `build_payload` maps `Record` slice to wire JSON; `post_batch` returns `PostBatchResult` enum: `Success` / `TransientError` / `CredentialError` / `UnparseableOk`; 13 unit tests with wiremock
 
 ---
 
