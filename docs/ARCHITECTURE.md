@@ -1,14 +1,14 @@
-# System Architecture
+# 系统架构 / System Architecture
 
-## Who This Is For
+## 适用读者 / Who This Is For
 
-This document is for developers, operators, and security reviewers who want to understand the overall design of AiTrack. It describes the responsibilities of each component, data flows, protocol versioning, and technology choices.
+本文档面向希望了解 AiTrack 整体设计的开发者、运维人员和安全审查人员。文档描述各组件的职责、数据流、协议版本演进以及技术选型。
 
 ---
 
-## Component Overview
+## 组件概览 / Component Overview
 
-AiTrack consists of three independent components that communicate over HTTP/JSON. All behavioral rules are governed by `CONTRACT.md` v1.2.
+AiTrack 由三个独立组件构成，通过 HTTP/JSON 协议互通。所有行为规范由 `CONTRACT.md` v1.2 约定。
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -36,11 +36,11 @@ AiTrack consists of three independent components that communicate over HTTP/JSON
 
 ---
 
-## Client: Rust CLI
+## 客户端：Rust CLI / Client: Rust CLI
 
-**Responsibility**: when an AI tool triggers an edit event, capture, sign, store locally, and report one edit record.
+**职责**：当 AI 工具触发编辑事件时，捕获、签名、本地存储并上报一条编辑记录。
 
-### Module Layout (Hexagonal Architecture, Sprint 2)
+### 模块布局（六边形架构 / Hexagonal Architecture，Sprint 2）
 
 ```
 src/
@@ -73,124 +73,124 @@ src/
   testkit/factories.rs      — seed-deterministic test factories
 ```
 
-### Local Storage
+### 本地存储 / Local Storage
 
-- `~/.aitrack/config.toml` (0600): api_url, credential, device_id
-- `~/.aitrack/records.db` (0600): SQLite, stores all captured records
+- `~/.aitrack/config.toml`（权限 0600）：api_url、credential、device_id
+- `~/.aitrack/records.db`（权限 0600）：SQLite 数据库，存储所有已捕获的记录
 
-`device_id` is generated as UUIDv4 on first run and persisted; read-only after that.
+`device_id` 首次运行时生成为 UUIDv4 并持久化，之后只读。
 
 ---
 
-## Data Flow: From Hook Trigger to Database
+## 数据流：从钩子触发到写入数据库 / Data Flow: From Hook Trigger to Database
 
-### Edit Event Flow (PostToolUse / afterFileEdit)
+### 编辑事件流（PostToolUse / afterFileEdit）
 
-1. AI tool fires PostToolUse/afterFileEdit hook
-2. `aitrack capture` reads JSON from stdin
-3. Select adapter by `--tool` flag (claude/codex/cursor) and parse payload
-4. Call `similar` crate to compute Myers/LCS diff
-   → added_lines, removed_lines, diff_hunk
-5. Spawn git to get repo metadata
-   → repo_url, branch, current_sha
-6. Fetch OS hostname
-7. Query `prompt_context` table for most recent prompt in current session → prompt_summary (optional, Claude only)
-8. Compute record_sig
-   → HMAC_SHA256(hmac_secret, canonical_string) (prompt_summary excluded)
-9. 2-second deduplication window check (same session_id + file_path)
-10. INSERT INTO records (synced=0)
+1. AI 工具触发 PostToolUse/afterFileEdit 钩子
+2. `aitrack capture` 从 stdin 读取 JSON
+3. 按 `--tool` 参数（claude/codex/cursor）选择适配器并解析 payload
+4. 调用 `similar` crate 计算 Myers/LCS diff
+   → added_lines、removed_lines、diff_hunk
+5. 调用 git 获取仓库元数据
+   → repo_url、branch、current_sha
+6. 获取操作系统 hostname
+7. 查询 `prompt_context` 表，取当前会话最近一条 prompt → prompt_summary（可选，仅 Claude）
+8. 计算 record_sig
+   → HMAC_SHA256(hmac_secret, canonical_string)（prompt_summary 不计入签名）
+9. 2 秒去重窗口检查（相同 session_id + file_path）
+10. INSERT INTO records（synced=0）
 11. flush_unsynced → POST /api/v1/ai-track/edits
-    → server 10-step validation chain
-    → update synced/retry_count
+    → 服务端 10 步校验链
+    → 更新 synced/retry_count
 
-### Prompt Capture Flow (UserPromptSubmit, Claude Code only)
+### Prompt 捕获流（UserPromptSubmit，仅 Claude Code）
 
-1. Claude Code fires UserPromptSubmit hook
-2. `aitrack prompt-capture` reads JSON from stdin (`{"session_id": "...", "prompt": "..."}`)
-3. Truncate to 512 characters
-4. INSERT INTO prompt_context (session_id, prompt_text)
-
----
-
-## Server 10-Step Validation Chain
-
-The server executes the following checks on each uploaded batch in order:
-
-| Step | Check | Failure result |
-|------|-------|---------------|
-| 1 | Bearer token valid | 401, reject entire batch |
-| 2 | X-AiTrack-Timestamp within ±300 seconds of server time | 401, reject entire batch |
-| 3 | X-AiTrack-Signature HMAC verification | 401, reject entire batch |
-| 4 | Per-record record_sig HMAC verification | single record: `rejected: sig_mismatch` |
-| 5 | diff_hunk line count consistent with added/removed_lines (±1) | single record: `flagged: diff_inconsistent` |
-| 6 | repo_url in allowlist (when enforce=true) | single record: `flagged/rejected: repo_unknown` |
-| 7 | file_path sanity check | single record: `flagged: path_mismatch` |
-| 8 | added_lines ≤ max_added_lines (default 5000) | single record: `flagged: oversized` |
-| 9 | Rate limit: (token, file_path) ≤ 30 per hour | single record: `rejected: rate_limited` |
-| 10 | Write accepted + flagged records to database | — |
-
-Flagged records are written to the database and marked for admin review. Rejected records are not written; the client increments retry_count.
+1. Claude Code 触发 UserPromptSubmit 钩子
+2. `aitrack prompt-capture` 从 stdin 读取 JSON（`{"session_id": "...", "prompt": "..."}`）
+3. 截断至 512 字符
+4. INSERT INTO prompt_context（session_id, prompt_text）
 
 ---
 
-## Protocol v1.2 Overview
+## 服务端 10 步校验链 / Server 10-Step Validation Chain
 
-**v1.2 change**: `POST /admin/tokens` now returns a single `credential` field (`<token>-<hmac_secret>` combined string) instead of separate `token` and `hmac_secret` fields. The client's `config.toml` key was merged from `token`/`hmac_secret` into `credential`; the CLI parameter changed to `--credential`.
+服务端对每批上传数据依次执行以下校验：
 
-**v1.1 change**: Added `hostname` field to edit records and heartbeat requests, allowing per-machine attribution when the same token is used from multiple machines.
+| 步骤 | 校验项 | 失败结果 |
+|------|--------|---------|
+| 1 | Bearer token 有效 | 401，拒绝整批 |
+| 2 | X-AiTrack-Timestamp 与服务器时间偏差 ±300 秒以内 | 401，拒绝整批 |
+| 3 | X-AiTrack-Signature HMAC 验证 | 401，拒绝整批 |
+| 4 | 每条记录的 record_sig HMAC 验证 | 单条：`rejected: sig_mismatch` |
+| 5 | diff_hunk 行数与 added/removed_lines 一致（±1） | 单条：`flagged: diff_inconsistent` |
+| 6 | repo_url 在白名单中（enforce=true 时） | 单条：`flagged/rejected: repo_unknown` |
+| 7 | file_path 合理性检查 | 单条：`flagged: path_mismatch` |
+| 8 | added_lines ≤ max_added_lines（默认 5000） | 单条：`flagged: oversized` |
+| 9 | 限流：(token, file_path) 每小时 ≤ 30 条 | 单条：`rejected: rate_limited` |
+| 10 | 将已接受和已标记的记录写入数据库 | — |
 
-- `hostname` is not an access control mechanism and does not enforce per-token isolation
-- Using the same token from multiple machines is a valid scenario; `hostname` is used for manual review to distinguish sources
+已标记（flagged）的记录写入数据库并等待管理员审核；被拒绝（rejected）的记录不写入，客户端 retry_count 自增。
 
-Request signing (two types):
+---
+
+## 协议 v1.2 概览 / Protocol v1.2 Overview
+
+**v1.2 变更**：`POST /admin/tokens` 现在返回单一 `credential` 字段（`<token>-<hmac_secret>` 合并字符串），不再分别返回 `token` 和 `hmac_secret`。客户端 `config.toml` 中的配置项由 `token`/`hmac_secret` 合并为 `credential`，CLI 参数改为 `--credential`。
+
+**v1.1 变更**：编辑记录和心跳请求中新增 `hostname` 字段，允许在同一 token 跨多台机器使用时按机器归因。
+
+- `hostname` 不是访问控制机制，不强制执行 per-token 隔离
+- 同一 token 在多台机器使用是合法场景，`hostname` 用于人工审查时区分来源
+
+请求签名（两类）：
 
 ```
-# Request-level signature (anti-replay)
+# 请求级签名（防重放）
 X-AiTrack-Signature = HMAC_SHA256(hmac_secret, "{unix_ts}\n{sha256_hex(body_bytes)}")
 
-# Record-level signature (anti-tampering / anti-forgery)
+# 记录级签名（防篡改 / 防伪造）
 record_sig = HMAC_SHA256(hmac_secret, canonical_string)
 ```
 
-The canonical_string field order is strictly defined in `CONTRACT.md`. Client and server must be byte-identical.
+canonical_string 的字段顺序在 `CONTRACT.md` 中严格定义。客户端与服务端必须字节完全一致。
 
 ---
 
-## Technology Choices
+## 技术选型 / Technology Choices
 
-### Why Rust for the client
+### 为何选用 Rust 作为客户端
 
-- No runtime dependencies; single binary; easy for developers to install
-- Hook commands need low latency (default 10-second timeout); Rust startup has no JVM/Node overhead
-- The `similar` crate provides a well-tested Myers/LCS diff implementation, preventing naive line-count inflation
+- 无运行时依赖，单一二进制，开发者安装便捷
+- 钩子命令要求低延迟（默认 10 秒超时），Rust 启动无 JVM/Node 开销
+- `similar` crate 提供经过充分验证的 Myers/LCS diff 实现，避免朴素行数统计导致的虚高
 
-### Why two server implementations (Java and Go)
+### 为何提供两套服务端实现（Java 和 Go）
 
-Both implementations are functionally and protocol-equivalent (wire-compatible), offering different operational options:
+两套实现在功能和协议上完全等价（线协议兼容），提供不同的运维选项：
 
-| Dimension | Java (Spring Boot 3.3.8) | Go (chi v5.2.5) |
-|-----------|-------------------------|-----------------|
-| Database | H2 (default) / PostgreSQL | SQLite (pure Go, no CGO) |
-| Deployment | JRE + jar, suits existing JVM infrastructure | Single binary, distroless image, ideal for minimal containers |
-| ORM | Spring Data JPA / Hibernate | Native database/sql, no ORM |
-| Best for | Teams with existing Java stack | Lightweight container or JVM-free environments |
+| 维度 | Java（Spring Boot 3.3.8） | Go（chi v5.2.5） |
+|------|--------------------------|-----------------|
+| 数据库 | H2（默认）/ PostgreSQL | SQLite（纯 Go，无 CGO） |
+| 部署 | JRE + jar，适合已有 JVM 基础设施 | 单一二进制，distroless 镜像，适合最小化容器 |
+| ORM | Spring Data JPA / Hibernate | 原生 database/sql，无 ORM |
+| 适合场景 | 已有 Java 技术栈的团队 | 轻量容器或无 JVM 环境 |
 
-Both implementations share the same E2E test suite (`e2e/`) to prove protocol compatibility.
+两套实现共享同一套 E2E 测试（`e2e/`），以验证协议兼容性。
 
 ---
 
-## Hexagonal Architecture (Sprint 2)
+## 六边形架构（Sprint 2）/ Hexagonal Architecture (Sprint 2)
 
-All three components follow the same hexagonal (ports-and-adapters) pattern:
+三个组件均遵循相同的六边形架构（端口与适配器模式）：
 
-**Rust client**
+**Rust 客户端**
 ```
 domain/     — pure domain logic (model.rs, crypto.rs, diff.rs, keywords.rs)
 port/       — output port abstractions (storage.rs → StoragePort, upload.rs → UploadPort)
 adapter/    — implementations (sqlite/, http/, event/)
 ```
 
-**Go server**
+**Go 服务端**
 ```
 domain/model/    — EditRecord, HeartbeatRecord, Token value objects
 domain/port/     — EditRecordPort, HeartbeatPort, TokenPort interfaces
@@ -200,7 +200,7 @@ adapter/         — db/ (SQLite impl), handler/ (HTTP handlers)
 infrastructure/  — app/ (wiring), config/ (env/flags)
 ```
 
-**Java server** — mirrors Go's layering with Spring Boot:
+**Java 服务端** — 结构与 Go 对应，基于 Spring Boot：
 ```
 domain/model/    — JPA entities and value objects; PageResult<T> replaces Spring Page<T>
 domain/port/     — DevicePort, EditRecordPort, TokenPort interfaces
@@ -210,9 +210,9 @@ adapter/         — db/ (JPA repos), handler/ (Spring MVC controllers)
 infrastructure/  — app/ (Spring Boot entry), config/ (profiles)
 ```
 
-> `PageResult<T>` is a plain Java generic class that mirrors the shape of Spring's `Page<T>` without importing `spring-data-commons`, keeping the domain layer framework-free.
+> `PageResult<T>` 是一个普通 Java 泛型类，与 Spring 的 `Page<T>` 形状一致但不引入 `spring-data-commons`，保持领域层框架无关。
 
-### HttpUploader Data Flow
+### HttpUploader 数据流 / HttpUploader Data Flow
 
 ```
 capture → lib.rs
@@ -226,11 +226,11 @@ capture → lib.rs
                   UnparseableOk      — 2xx but body parse failed → treated as success
 ```
 
-`HttpUploader` implements `UploadPort`. The retry loop lives in `uploader.rs`; `HttpUploader` itself is stateless.
+`HttpUploader` 实现 `UploadPort`。重试循环位于 `uploader.rs`；`HttpUploader` 本身是无状态的。
 
-### testapp Package (Go, Sprint 2)
+### testapp 包（Go，Sprint 2）/ testapp Package (Go, Sprint 2)
 
-`server-go/testapp/` is a thin wiring package that exports two symbols:
+`server-go/testapp/` 是一个轻量级装配包，导出两个符号：
 
 ```go
 // Build wires up the full Go server with a real chi router, real handler chain,
@@ -243,59 +243,59 @@ func Build(cfg config.Config) (*chi.Mux, func(), error)
 func MemoryConfig(adminKey string) config.Config
 ```
 
-This avoids the need for Docker or a separately launched process in Go integration tests. `chain_integration_test.go` uses it to run 3 full-chain scenarios against a real router with an in-memory SQLite database.
+这样 Go 集成测试无需 Docker 或独立启动的服务进程。`chain_integration_test.go` 使用它针对真实 router 和内存 SQLite 数据库运行 3 个完整链路测试场景。
 
 ---
 
-## Architecture Evolution Roadmap
+## 架构演进路线 / Architecture Evolution Roadmap
 
-This section describes the database architecture evolution. Phase DB-1/DB-2 (vector foundation layer) have been delivered. Phase DB-3 (semantic search endpoints) has also been delivered. Developer profiling (Phase 3) and prompt capture (Phase 4) are complete.
+本节描述数据库架构的演进路线。Phase DB-1/DB-2（向量基础层）已交付；Phase DB-3（语义搜索端点）已交付；开发者画像（Phase 3）和 Prompt 捕获（Phase 4）均已完成。
 
-### Database Vectorization
+### 数据库向量化 / Database Vectorization
 
-**Client**: sqlite-vec extension added to the existing SQLite storage, adding a vector column to edit records in `records.db` for semantic similarity queries. The extension is optional — it degrades gracefully to plain SQLite mode if unavailable, with no impact on the `capture` main pipeline.
+**客户端**：在现有 SQLite 存储中新增 sqlite-vec 扩展，为 `records.db` 中的编辑记录增加向量列，用于语义相似度查询。该扩展是可选的——如果不可用，会优雅降级为纯 SQLite 模式，不影响 `capture` 主流程。
 
-**Server (Java + Go dual implementation)**: both servers now support PostgreSQL/[ParadeDB](https://www.paradedb.com/) in addition to their embedded databases. ParadeDB is a PostgreSQL-based distribution integrating `pg_search` (BM25 full-text search) and `pgvector` (vector search), fully compatible with the PostgreSQL wire protocol — no changes needed to existing JPA/pgx layers.
+**服务端（Java + Go 双实现）**：两套服务端现均支持 PostgreSQL/[ParadeDB](https://www.paradedb.com/)，作为内嵌数据库的替代方案。ParadeDB 是基于 PostgreSQL 的发行版，集成了 `pg_search`（BM25 全文搜索）和 `pgvector`（向量搜索），完全兼容 PostgreSQL 线协议——现有 JPA/pgx 层无需修改。
 
-### Phase DB-1 / DB-2 — Vector Foundation (Delivered)
+### Phase DB-1 / DB-2 — 向量基础（已交付）/ Vector Foundation (Delivered)
 
-#### Client — sqlite-vec local embedding storage
+#### 客户端 — sqlite-vec 本地向量存储
 
-The Rust client's database layer (`client/src/db/`) is organized as a module:
+Rust 客户端的数据库层（`client/src/db/`）按模块组织：
 
-| File | Responsibility |
-|------|----------------|
-| `mod.rs` | DB open, auto_extension registration, public re-exports |
-| `schema.rs` | DDL constants (`records`, `kv`, `vec_records`) |
-| `models.rs` | `Record` and `InspectRow` structs |
-| `queries.rs` | All CRUD query functions |
-| `vec.rs` | sqlite-vec probe, `VEC_DISABLED` AtomicBool, `ensure_vec_table()` |
+| 文件 | 职责 |
+|------|------|
+| `mod.rs` | 数据库打开、auto_extension 注册、公开导出 |
+| `schema.rs` | DDL 常量（`records`、`kv`、`vec_records`） |
+| `models.rs` | `Record` 和 `InspectRow` 结构体 |
+| `queries.rs` | 所有 CRUD 查询函数 |
+| `vec.rs` | sqlite-vec 探针、`VEC_DISABLED` AtomicBool、`ensure_vec_table()` |
 
-sqlite-vec is registered via `sqlite3_auto_extension` at DB open time. If the extension fails to load, `VEC_DISABLED` is set to `true` and core capture continues normally. The `vec_records` virtual table uses `vec0(embedding float[384])` (384-dim MiniLM).
+sqlite-vec 通过 `sqlite3_auto_extension` 在数据库打开时注册。若扩展加载失败，`VEC_DISABLED` 设为 `true`，核心捕获流程正常继续。`vec_records` 虚拟表使用 `vec0(embedding float[384])`（384 维 MiniLM）。
 
-New column in `records` table: `embedding BLOB` (nullable, populated in Phase DB-3).
+`records` 表新增列：`embedding BLOB`（可为 null，Phase DB-3 补充填充）。
 
-#### Server — ParadeDB / PostgreSQL support (DB-1)
+#### 服务端 — ParadeDB / PostgreSQL 支持（DB-1）
 
-**Java (Spring Boot)**
+**Java（Spring Boot）**
 
-Activate with `SPRING_PROFILES_ACTIVE=postgres`. New env vars:
+通过 `SPRING_PROFILES_ACTIVE=postgres` 激活。新增环境变量：
 
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `AITRACK_DB_HOST` | `localhost` | PostgreSQL host |
-| `AITRACK_DB_PORT` | `5432` | PostgreSQL port |
-| `AITRACK_DB_NAME` | `aitrack` | Database name |
-| `AITRACK_DB_USER` | `aitrack` | Username |
-| `AITRACK_DB_PASSWORD` | `aitrack_secret` | Password |
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `AITRACK_DB_HOST` | `localhost` | PostgreSQL 主机 |
+| `AITRACK_DB_PORT` | `5432` | PostgreSQL 端口 |
+| `AITRACK_DB_NAME` | `aitrack` | 数据库名 |
+| `AITRACK_DB_USER` | `aitrack` | 用户名 |
+| `AITRACK_DB_PASSWORD` | `aitrack_secret` | 密码 |
 
-New columns added to `edit_records` table: `prompt_summary TEXT` and `embedding BLOB/BYTEA` (both nullable, reserved for Phase DB-3 backfill).
+`edit_records` 表新增列：`prompt_summary TEXT` 和 `embedding BLOB/BYTEA`（均可为 null，预留给 Phase DB-3 补填）。
 
-**Go (chi)**
+**Go（chi）**
 
-Activate with `DATABASE_URL=postgres://user:pass@host:5432/dbname`. When `DATABASE_URL` is empty or absent, Go server uses embedded SQLite as before.
+通过 `DATABASE_URL=postgres://user:pass@host:5432/dbname` 激活。若 `DATABASE_URL` 为空或缺失，Go 服务端继续使用内嵌 SQLite。
 
-**ParadeDB index DDL** (run once after first deploy on ParadeDB):
+**ParadeDB 索引 DDL**（在 ParadeDB 上首次部署后执行一次）：
 
 ```sql
 -- BM25 full-text index on diff_hunk + prompt_summary
@@ -307,67 +307,67 @@ CREATE INDEX IF NOT EXISTS edits_hnsw ON edit_records
   USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;
 ```
 
-Reference script: `server-java/src/main/resources/db-postgres-init.sql`.
+参考脚本：`server-java/src/main/resources/db-postgres-init.sql`。
 
-### Phase DB-3 — Semantic Search API (Delivered)
+### Phase DB-3 — 语义搜索 API（已交付）/ Semantic Search API (Delivered)
 
-Both endpoints are implemented in Java and Go. Embeddings are null until a backfill is run.
+两个端点均在 Java 和 Go 中实现。向量数据在补填脚本运行前为 null。
 
-#### `GET /edits/search` — BM25 full-text search
+#### `GET /edits/search` — BM25 全文搜索
 
-Uses ParadeDB `|||` operator against `diff_hunk` and `prompt_summary`. Results ranked by `paradedb.score(id)`.
+使用 ParadeDB `|||` 运算符对 `diff_hunk` 和 `prompt_summary` 进行搜索，结果按 `paradedb.score(id)` 排序。
 
-Both Java (`EditSearchService.searchBm25`) and Go (`SearchHandler`) build the query dynamically with optional `token_key`/`repo` filters and return `{"query", "total", "hits"}`.
+Java（`EditSearchService.searchBm25`）和 Go（`SearchHandler`）均动态构建查询，支持可选的 `token_key`/`repo` 过滤，返回 `{"query", "total", "hits"}`。
 
-#### `POST /edits/similar` — pgvector HNSW ANN
+#### `POST /edits/similar` — pgvector HNSW 近似最近邻搜索
 
-Accepts a 384-dim query vector, casts to `vector` type, and orders by `embedding <=> CAST($1 AS vector)` cosine distance. Only rows with `embedding IS NOT NULL` are considered.
+接受 384 维查询向量，转换为 `vector` 类型，按 `embedding <=> CAST($1 AS vector)` 余弦距离排序。仅考虑 `embedding IS NOT NULL` 的行。
 
-Returns `{"hits": [..., "distance": float]}` where `distance` is in [0, 2] (lower = more similar).
+返回 `{"hits": [..., "distance": float]}`，其中 `distance` 取值范围 [0, 2]（越小越相似）。
 
-#### H2 / SQLite fallback
+#### H2 / SQLite 降级处理
 
-Both handlers check `isPostgres()` / `isPostgres` flag at request time and return HTTP 501 when running against embedded databases.
+两个处理器在请求时检查 `isPostgres()` / `isPostgres` 标志，在内嵌数据库模式下返回 HTTP 501。
 
-#### Embedding backfill
+#### 向量补填 / Embedding Backfill
 
-Embeddings are not populated automatically. To enable ANN search, run the backfill script (`scripts/backfill_embeddings.py`) or populate the `embedding` column directly from the client's sqlite-vec export.
-
----
-
-### Phase 3 — Developer Profile API (Delivered)
-
-- **`GET /api/v1/ai-track/profiles/{token_key}`**: Java + Go dual implementation, auth via X-Admin-Key
-- **Multi-dimensional profiling**: frequency (daily/weekly trend), depth (line distribution, p50/p90, comment_density), languages (programming language distribution from 23 file extensions), prompt_patterns (intent classification: generate/fix_debug/refactor/explain/test/other), tool breakdown (claude/codex/cursor)
-- **Daily aggregation job**: Java `ProfileAggregationJob` (`@Scheduled` daily at 02:00); Go equivalent goroutine
-- **Auth**: X-Admin-Key, 403/404/200; no ParadeDB dependency (works with H2/SQLite)
-
-### Phase 4 — Prompt Capture (Delivered)
-
-- New `UserPromptSubmit` hook (Claude Code only): when a user submits a prompt, aitrack writes the prompt text (truncated to 512 characters) to the local `prompt_context` table
-- New `prompt_summary TEXT` column in `records` table (nullable); capture pipeline queries the most recent prompt for the current session and attaches it
-- `prompt_summary` is excluded from `record_sig` computation (used for profiling only, does not affect anti-tampering)
-- `prompt_summary` is uploaded as an optional field with each edit record
-
-### Sprint 2 — Hexagonal Architecture Refactor (2026-05-20, Delivered)
-
-All three components fully refactored to hexagonal architecture. Test coverage remains ≥ 90% across all three.
-
-See the [Hexagonal Architecture](#hexagonal-architecture-sprint-2) section above for the full module layout.
-
-Test counts after Sprint 2:
-- Rust client: 291 tests, **90.71%** line coverage
-- Go server: 244 tests, **95.3%** coverage
-- Java server: 218 tests, **LINE ≥ 90%**
+向量不会自动填充。要启用近似最近邻搜索，运行补填脚本（`scripts/backfill_embeddings.py`）或从客户端 sqlite-vec 导出直接填充 `embedding` 列。
 
 ---
 
-## Security Design Principles
+### Phase 3 — 开发者画像 API（已交付）/ Developer Profile API (Delivered)
 
-- **Least privilege**: client config and database stored with 0600 permissions
-- **Anti-tampering**: every record computes record_sig; server re-verifies
-- **Anti-replay**: request signatures include a timestamp; server rejects requests outside the 300-second window
-- **Anti-forgery**: record_sig binds device_id + token_key; cross-device forgery is invalid
-- **Encrypted storage**: hmac_secret stored server-side with AES-256-GCM encryption (production environments)
+- **`GET /api/v1/ai-track/profiles/{token_key}`**：Java + Go 双实现，通过 X-Admin-Key 鉴权
+- **多维度画像**：频率（日/周趋势）、深度（行数分布、p50/p90、注释密度）、语言（来自 23 种文件扩展名的编程语言分布）、prompt_patterns（意图分类：generate/fix_debug/refactor/explain/test/other）、工具分布（claude/codex/cursor）
+- **每日聚合任务**：Java `ProfileAggregationJob`（`@Scheduled` 每日 02:00 执行）；Go 侧等价 goroutine
+- **鉴权**：X-Admin-Key，403/404/200；无 ParadeDB 依赖（H2/SQLite 下可用）
 
-See [SECURITY_MODEL.md](SECURITY_MODEL.md) for details.
+### Phase 4 — Prompt 捕获（已交付）/ Prompt Capture (Delivered)
+
+- 新增 `UserPromptSubmit` 钩子（仅 Claude Code）：用户提交 prompt 时，aitrack 将 prompt 文本（截断至 512 字符）写入本地 `prompt_context` 表
+- `records` 表新增 `prompt_summary TEXT` 列（可为 null）；捕获流程查询当前会话最近一条 prompt 并附加
+- `prompt_summary` 不计入 `record_sig` 计算（仅用于画像分析，不影响防篡改机制）
+- `prompt_summary` 作为可选字段随每条编辑记录一并上报
+
+### Sprint 2 — 六边形架构重构（2026-05-20，已交付）/ Hexagonal Architecture Refactor (Delivered)
+
+三个组件全部重构为六边形架构。三端测试覆盖率均维持在 ≥ 90%。
+
+完整模块布局见上方[六边形架构](#六边形架构sprint-2--hexagonal-architecture-sprint-2)章节。
+
+Sprint 2 后的测试数量：
+- Rust 客户端：291 个测试，**90.71%** 行覆盖
+- Go 服务端：244 个测试，**95.3%** 覆盖率
+- Java 服务端：218 个测试，**行覆盖 ≥ 90%**
+
+---
+
+## 安全设计原则 / Security Design Principles
+
+- **最小权限（Least privilege）**：客户端配置和数据库以 0600 权限存储
+- **防篡改（Anti-tampering）**：每条记录计算 record_sig，服务端重新验证
+- **防重放（Anti-replay）**：请求签名包含时间戳，服务端拒绝 300 秒窗口外的请求
+- **防伪造（Anti-forgery）**：record_sig 绑定 device_id + token_key，跨设备伪造无效
+- **加密存储（Encrypted storage）**：hmac_secret 在服务端使用 AES-256-GCM 加密存储（生产环境）
+
+详见 [SECURITY_MODEL.md](SECURITY_MODEL.md)。

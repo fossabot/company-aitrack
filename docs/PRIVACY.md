@@ -1,180 +1,180 @@
-# aitrack Privacy Notice
+# aitrack 隐私说明 / aitrack Privacy Notice
 
-Version: v1.1 · Last updated: 2026-05-19
-
----
-
-## 1. Overview
-
-This document explains what data aitrack collects, why, where it is stored, who can see it, and what control you have over it.
-
-**What aitrack is:** A self-hosted AI coding governance platform. It hooks into file-edit events from AI coding tools (Claude Code, Codex CLI, Cursor) and records what changes those tools make to your codebase. The goal is to give teams a factual picture of how AI tools are being used in development.
-
-**Why this document exists:** Any tool that records developer activity should be transparent about what it does. This is not a legal disclaimer — it is a direct answer to the question "where does my data go?"
-
-**Self-hosted by design:** aitrack has no cloud component. When you deploy aitrack, you are the operator. All data stays inside your own infrastructure. No data is ever sent to the aitrack project maintainers or any third-party service.
+版本：v1.1 · 最后更新：2026-05-19
 
 ---
 
-## 2. What We Collect
+## 1. 概览 / Overview
 
-Each record corresponds to one file-edit event triggered by an AI tool. These are all the fields collected:
+本文档说明 aitrack 收集哪些数据、收集原因、存储位置、可见范围，以及您对数据的控制权。
 
-| Data item | What is collected | Why it is needed | Where it is stored |
-|-----------|-------------------|------------------|--------------------|
-| **Change diff (diff_hunk)** | The actual added/removed code lines, in standard unified diff format — only the changed section, not the full file | Analyze what code the AI actually produced | Local SQLite + server database |
-| **File path (file_path)** | Relative path, e.g. `src/main/java/com/example/Service.java` | Understand which modules and layers are most affected | Local SQLite + server database |
-| **Lines added (added_lines)** | Actual new lines introduced by this edit | Quantify AI code contribution | Local SQLite + server database |
-| **Lines removed (removed_lines)** | Actual lines deleted by this edit | Quantify AI-driven refactoring | Local SQLite + server database |
-| **Timestamp** | Unix seconds, when the event occurred | Time-based usage analysis | Local SQLite + server database |
-| **Repository URL (repo_url)** | Git remote origin URL, e.g. `git@github.com:org/repo.git` | Group records by project | Local SQLite + server database |
-| **Branch (branch)** | Current Git branch name | Distinguish trunk from feature work | Local SQLite + server database |
-| **Commit hash (current_sha)** | HEAD commit SHA at the time of the edit | Associate edits with a specific code snapshot | Local SQLite + server database |
-| **Hostname** | OS hostname of the machine that made the edit, e.g. `MacBook-Pro.local` | Identify which machine produced a record when one credential is used across multiple machines; not used for access control | Local SQLite + server database |
-| **AI tool type (tool)** | One of: `claude`, `codex`, `cursor` | Distinguish usage patterns by tool | Local SQLite + server database |
-| **Token identifier (token_key)** | The token portion of the credential assigned by an admin, format `aitrack_<hex>` | Attribute records to a specific developer seat | Local SQLite only (used for local filtering, not sent with upload payload) |
-| **Device ID (device_id)** | UUIDv4 generated on first run, persisted to local config | Distinguish multiple devices using the same credential | Local SQLite + server database |
-| **Record signature (record_sig)** | HMAC-SHA256 signature binding all the above fields | Detect if a local record has been tampered with or forged | Local SQLite + server database |
+**aitrack 是什么**：一个自托管的 AI 编码治理平台。它钩入来自 AI 编码工具（Claude Code、Codex CLI、Cursor）的文件编辑事件，记录这些工具对代码库所做的变更。目标是为团队提供 AI 工具在开发中实际使用情况的客观数据。
 
-**A note on diff_hunk:** This is the diff of the changed section, not the full file. If the AI modified a function, you get the before/after for that function — nothing else from the file is included. The diff algorithm uses Myers/LCS minimum edit distance, so diffs are as small as possible.
+**本文档的目的**：任何记录开发者行为的工具都应当对其行为保持透明。这不是法律免责声明——而是对"我的数据去哪了？"这一问题的直接回答。
+
+**自托管设计**：aitrack 没有云端组件。部署 aitrack 时，您就是运营方。所有数据均保留在您自己的基础设施内。任何数据都不会发送给 aitrack 项目维护者或任何第三方服务。
 
 ---
 
-## 3. What We Do Not Collect
+## 2. 我们收集什么 / What We Collect
 
-The following data is **outside the collection scope**, and here is how that is enforced technically:
+每条记录对应 AI 工具触发的一个文件编辑事件。以下是所有收集的字段：
 
-| Not collected | How it is enforced |
-|---------------|--------------------|
-| **Full file contents** | Only `diff_hunk` (the changed section) is stored. The capture process does not read or store anything beyond the diff payload provided by the tool hook. |
-| **Prompt text** | v1.1 through Phase 3: not collected at all. The capture entry point only processes the file-edit event JSON; the prompt never appears in this payload. |
-| **Passwords, private keys, certificates** | The capture flow includes a file path plausibility check that automatically skips files matching patterns such as: `*.key`, `*.pem`, `*.pfx`, `*.p12`, `*.env`, `*secret*`, `*password*`, and similar sensitive file names. No record is created for these paths. |
-| **AI conversation history** | aitrack hooks file-edit events only. Conversation history from Claude Code, Codex, or Cursor does not pass through aitrack at any point. |
-| **The HMAC secret portion of credentials** | A credential combines `<token>-<hmac_secret>`. The `hmac_secret` is only used locally to compute signatures and is never sent over the network. |
-| **Personal identity information unrelated to coding** | aitrack does not access any system outside the development environment. |
+| 数据项 | 收集内容 | 收集原因 | 存储位置 |
+|--------|----------|----------|----------|
+| **变更差异（diff_hunk）** | 实际新增/删除的代码行，标准 unified diff 格式——仅变更部分，非整个文件 | 分析 AI 实际产出的代码 | 本地 SQLite + 服务端数据库 |
+| **文件路径（file_path）** | 相对路径，如 `src/main/java/com/example/Service.java` | 了解哪些模块和层受影响最多 | 本地 SQLite + 服务端数据库 |
+| **新增行数（added_lines）** | 本次编辑实际引入的新行数 | 量化 AI 代码贡献 | 本地 SQLite + 服务端数据库 |
+| **删除行数（removed_lines）** | 本次编辑实际删除的行数 | 量化 AI 驱动的重构 | 本地 SQLite + 服务端数据库 |
+| **时间戳（timestamp）** | Unix 秒，事件发生时刻 | 基于时间的使用分析 | 本地 SQLite + 服务端数据库 |
+| **仓库 URL（repo_url）** | Git remote origin URL，如 `git@github.com:org/repo.git` | 按项目分组记录 | 本地 SQLite + 服务端数据库 |
+| **分支（branch）** | 当前 Git 分支名 | 区分主干与功能分支 | 本地 SQLite + 服务端数据库 |
+| **提交哈希（current_sha）** | 编辑时的 HEAD commit SHA | 将编辑关联到特定代码快照 | 本地 SQLite + 服务端数据库 |
+| **主机名（hostname）** | 机器的操作系统 hostname，如 `MacBook-Pro.local` | 在同一凭证跨多台机器使用时识别来源机器；不用于访问控制 | 本地 SQLite + 服务端数据库 |
+| **AI 工具类型（tool）** | `claude`、`codex`、`cursor` 之一 | 按工具区分使用模式 | 本地 SQLite + 服务端数据库 |
+| **Token 标识符（token_key）** | 管理员分配的凭证中的 token 部分，格式 `aitrack_<hex>` | 将记录归因到特定开发者席位 | 仅本地 SQLite（用于本地过滤，不随上传 payload 发送） |
+| **设备 ID（device_id）** | 首次运行时生成的 UUIDv4，持久化至本地配置 | 区分使用同一凭证的多台设备 | 本地 SQLite + 服务端数据库 |
+| **记录签名（record_sig）** | 绑定以上所有字段的 HMAC-SHA256 签名 | 检测本地记录是否被篡改或伪造 | 本地 SQLite + 服务端数据库 |
 
----
-
-## 4. How Data Is Stored
-
-### Local storage (client side)
-
-- Directory: `~/.aitrack/`
-- Database: `~/.aitrack/records.db` (SQLite)
-  - File permissions: 0600 — readable only by the owning user
-  - All records are written here before upload; you can inspect them with `aitrack inspect`
-- Config file: `~/.aitrack/config.toml`
-  - File permissions: 0600
-  - Contains: API URL, credential (token + hmac_secret combined), device ID
-
-### Server-side storage
-
-- Database: PostgreSQL (ParadeDB) or SQLite, depending on your deployment mode
-- Only administrators with direct database access can query raw records
-- All data remains within your own infrastructure — no external service involved
-
-### Encryption
-
-- The `hmac_secret` portion of each credential is stored on the server encrypted with AES-256-GCM. Even an admin with database access cannot read it in plaintext.
-- Tokens are stored server-side as SHA-256 hashes. The original credential is returned only once, at issuance.
-- Records in transit are protected by dual HMAC-SHA256 signatures (per-record `record_sig` + per-request `X-AiTrack-Signature`), so any tampering in transit can be detected.
+**关于 diff_hunk 的说明**：这是变更部分的差异，不是完整文件。如果 AI 修改了一个函数，您得到的是该函数的前后对比——文件中的其他内容不会被包含。差异算法使用 Myers/LCS 最小编辑距离，因此 diff 尽可能小。
 
 ---
 
-## 5. Who Can Access the Data
+## 3. 我们不收集什么 / What We Do Not Collect
 
-| Role | What they can see | How |
-|------|-------------------|-----|
-| **You (the developer)** | All records generated on your machine, including diff content | `aitrack inspect --limit 100` — reads directly from local SQLite, no network needed |
-| **Administrator** | All records across all developers (attributed by token) | Server database or admin API (requires `X-Admin-Key`) |
-| **Other team members (non-admin)** | No direct access to server-side records | — |
-| **Third parties** | Nothing | — |
+以下数据**不在收集范围内**，并通过技术手段强制保证：
 
-**On third-party access:** Because aitrack is self-hosted, all data transmission happens within your own network. aitrack calls no external APIs and sends no data to the aitrack project maintainers or any vendor. If you deploy on a cloud VM, your cloud provider's standard policies apply to the infrastructure, but aitrack itself does not route data externally.
-
----
-
-## 6. Data Retention
-
-**Current version (v1.1) has no automatic expiry.** Records uploaded to the server persist until explicitly deleted.
-
-How to clean up:
-
-- **Local records:** `aitrack clean --all` removes already-synced records from the local SQLite database.
-- **Server records:** The administrator can delete records by token key, time range, or repository using direct database operations or the admin API.
-
-A configurable server-side TTL is planned for a future version. This document will be updated when that is available.
+| 不收集的数据 | 技术保障方式 |
+|-------------|-------------|
+| **完整文件内容** | 仅存储 `diff_hunk`（变更部分）。捕获流程不读取或存储工具钩子 payload 之外的任何内容。 |
+| **Prompt 文本** | v1.1 至 Phase 3：完全不收集。捕获入口仅处理文件编辑事件 JSON；prompt 不出现在此 payload 中。 |
+| **密码、私钥、证书** | 捕获流程包含文件路径合理性检查，自动跳过匹配以下模式的文件：`*.key`、`*.pem`、`*.pfx`、`*.p12`、`*.env`、`*secret*`、`*password*` 等敏感文件名。这些路径不会生成任何记录。 |
+| **AI 对话历史** | aitrack 仅钩入文件编辑事件。Claude Code、Codex 或 Cursor 的对话历史不经过 aitrack。 |
+| **凭证中的 HMAC secret 部分** | 凭证由 `<token>-<hmac_secret>` 组成。`hmac_secret` 仅在本地用于计算签名，从不通过网络发送。 |
+| **与编码无关的个人身份信息** | aitrack 不访问开发环境以外的任何系统。 |
 
 ---
 
-## 7. Your Rights as a Self-Hosted User
+## 4. 数据如何存储 / How Data Is Stored
 
-Because you self-host aitrack, you control everything:
+### 本地存储（客户端侧）/ Local storage (client side)
 
-**Inspect your local data:**
+- 目录：`~/.aitrack/`
+- 数据库：`~/.aitrack/records.db`（SQLite）
+  - 文件权限：0600——仅文件所有者可读
+  - 所有记录在上传前写入此处；可通过 `aitrack inspect` 查看
+- 配置文件：`~/.aitrack/config.toml`
+  - 文件权限：0600
+  - 包含：API URL、凭证（token + hmac_secret 合并值）、设备 ID
+
+### 服务端存储 / Server-side storage
+
+- 数据库：PostgreSQL（ParadeDB）或 SQLite，取决于部署模式
+- 仅有直接数据库访问权限的管理员可查询原始记录
+- 所有数据保留在您自己的基础设施内——不涉及外部服务
+
+### 加密 / Encryption
+
+- 每个凭证中的 `hmac_secret` 部分在服务端使用 AES-256-GCM 加密存储。即使拥有数据库访问权限的管理员也无法以明文读取它。
+- Token 在服务端以 SHA-256 哈希值存储。原始凭证仅在签发时返回一次。
+- 传输中的记录受双层 HMAC-SHA256 签名保护（per-record `record_sig` + per-request `X-AiTrack-Signature`），任何传输中的篡改均可被检测。
+
+---
+
+## 5. 谁可以访问数据 / Who Can Access the Data
+
+| 角色 | 可见数据 | 访问方式 |
+|------|----------|----------|
+| **您（开发者）** | 您机器上生成的所有记录，包括 diff 内容 | `aitrack inspect --limit 100` — 直接读取本地 SQLite，无需网络 |
+| **管理员** | 所有开发者的所有记录（按 token 归因） | 服务端数据库或管理员 API（需要 `X-Admin-Key`） |
+| **其他团队成员（非管理员）** | 无法直接访问服务端记录 | — |
+| **第三方** | 无 | — |
+
+**关于第三方访问**：由于 aitrack 是自托管的，所有数据传输均在您自己的网络内进行。aitrack 不调用任何外部 API，也不向 aitrack 项目维护者或任何供应商发送数据。如果您部署在云虚拟机上，云服务商的标准条款适用于基础设施，但 aitrack 本身不会将数据路由至外部。
+
+---
+
+## 6. 数据保留 / Data Retention
+
+**当前版本（v1.1）没有自动过期机制。** 上传到服务端的记录会一直保留，直到显式删除。
+
+清理方法：
+
+- **本地记录**：`aitrack clean --all` 从本地 SQLite 数据库中删除已同步的记录。
+- **服务端记录**：管理员可通过直接数据库操作或管理员 API，按 token key、时间范围或仓库删除记录。
+
+可配置的服务端 TTL 计划在未来版本中提供。届时本文档将相应更新。
+
+---
+
+## 7. 自托管用户的权利 / Your Rights as a Self-Hosted User
+
+由于您自托管 aitrack，您掌控一切：
+
+**查看本地数据 / Inspect your local data：**
 ```bash
-aitrack inspect --limit 100      # View the most recent 100 records (includes diff content)
-aitrack inspect --pending        # View records not yet uploaded
-aitrack stats                    # Aggregated counts by tool and repository
-aitrack status                   # Check which tool hooks are installed
+aitrack inspect --limit 100      # 查看最近 100 条记录（含 diff 内容）
+aitrack inspect --pending        # 查看尚未上传的记录
+aitrack stats                    # 按工具和仓库分组的聚合统计
+aitrack status                   # 检查已安装的工具钩子
 ```
 
-**Remove hooks at any time:**
+**随时移除钩子 / Remove hooks at any time：**
 ```bash
-aitrack remove --claude          # Remove the Claude Code hook
-aitrack remove --codex           # Remove the Codex CLI hook
-aitrack remove --cursor          # Remove the Cursor hook
+aitrack remove --claude          # 移除 Claude Code 钩子
+aitrack remove --codex           # 移除 Codex CLI 钩子
+aitrack remove --cursor          # 移除 Cursor 钩子
 ```
 
-Once a hook is removed, no new records are created by that tool.
+钩子移除后，该工具不再创建新记录。
 
-**Delete your data:** As a self-hosted operator, you have full access to both the local SQLite file (`~/.aitrack/records.db`) and the server database. You can delete records directly or ask your admin to do so. There is no lock-in or data held outside your infrastructure.
+**删除数据 / Delete your data：** 作为自托管运营方，您对本地 SQLite 文件（`~/.aitrack/records.db`）和服务端数据库均有完全访问权限。您可以直接删除记录，或请管理员执行。没有锁定，也没有数据保留在您的基础设施之外。
 
-**Stop collection entirely:** Uninstall all hooks (`aitrack remove --claude --codex --cursor`) or remove the aitrack binary. Existing records in the database are not affected until you delete them manually.
-
----
-
-## 8. A Note on Prompt Data
-
-**Current version (v1.1, Phase 1–3): prompts are not collected, at all.**
-
-The aitrack capture hook fires after a file-edit event completes. At that point, the prompt is no longer in the processing flow. The client code does not read or store any prompt text.
-
-**Phase 4 (not yet implemented):** There is a plan to collect a prompt summary hash — a one-way fingerprint used for semantic deduplication analysis — without collecting the prompt text itself. This is not yet part of any released version. Before implementing it, this document will be updated and users will be notified in advance.
+**完全停止采集 / Stop collection entirely：** 卸载所有钩子（`aitrack remove --claude --codex --cursor`）或删除 aitrack 二进制文件。数据库中已有的记录不受影响，需手动删除。
 
 ---
 
-## 9. Security Mechanisms
+## 8. 关于 Prompt 数据的说明 / A Note on Prompt Data
 
-**Dual HMAC-SHA256 signatures:**
+**当前版本（v1.1，Phase 1–3）：完全不收集 prompt。**
 
-- Per-record signature (`record_sig`): Computed when a record is written to the local database. It binds the device ID, hostname, timestamp, tool, file path, repository URL, commit SHA, line counts, and a hash of the diff. The server rejects records with invalid signatures.
-- Per-request signature (`X-AiTrack-Signature`): Covers the entire upload request body and a timestamp. Prevents replay attacks and in-transit modification.
+aitrack 捕获钩子在文件编辑事件完成后触发。此时 prompt 已不在处理流程中。客户端代码不读取或存储任何 prompt 文本。
 
-**Credential storage:**
-
-- The `hmac_secret` is stored server-side with AES-256-GCM encryption.
-- Tokens are stored as SHA-256 hashes. The plaintext credential is returned only once at issuance and cannot be recovered from the server afterward.
-
-**Path filtering:** The capture flow (step 8 of 10) checks each file path for plausibility. Files matching sensitive name patterns are automatically skipped — no record is written, no diff is computed.
-
-**Rate limiting:** The server enforces a limit of 30 records per (token, file_path) pair per hour to prevent gaming via edit count inflation.
-
-**Heartbeat:** The client periodically reports hook installation status to the server, so administrators can detect if hooks have been silently removed (hardening point H3).
-
-**Local database permissions:** Both `~/.aitrack/records.db` and `~/.aitrack/config.toml` are created with 0600 permissions. On multi-user machines, other OS users cannot read these files.
+**Phase 4（尚未实现）：** 计划收集 prompt 摘要哈希——一种用于语义去重分析的单向指纹——而非 prompt 文本本身。这尚未包含在任何已发布版本中。在实现之前，本文档将提前更新，并提前通知用户。
 
 ---
 
-## 10. Contact and Feedback
+## 9. 安全机制 / Security Mechanisms
 
-If you have questions about how data is handled, found a security issue, or want to suggest changes to this document:
+**双层 HMAC-SHA256 签名 / Dual HMAC-SHA256 signatures：**
 
-- Open an issue in the aitrack GitHub repository
-- Or contact the repository maintainers directly
+- Per-record 签名（`record_sig`）：记录写入本地数据库时计算。它绑定 device_id、hostname、timestamp、tool、file_path、repo_url、commit SHA、行数以及 diff 的哈希值。服务端拒绝签名无效的记录。
+- Per-request 签名（`X-AiTrack-Signature`）：覆盖整个上传请求体和时间戳。防止重放攻击和传输中的篡改。
 
-For security vulnerabilities, please follow the responsible disclosure process described in `SECURITY.md` at the repository root.
+**凭证存储 / Credential storage：**
+
+- `hmac_secret` 在服务端使用 AES-256-GCM 加密存储。
+- Token 以 SHA-256 哈希值存储。明文凭证仅在签发时返回一次，之后无法从服务端恢复。
+
+**路径过滤 / Path filtering：** 捕获流程（10 步中的第 8 步）检查每个文件路径的合理性。匹配敏感文件名模式的文件会被自动跳过——不会写入记录，也不会计算 diff。
+
+**限流 / Rate limiting：** 服务端对每个（token, file_path）对每小时限制 30 条记录，防止通过编辑次数虚增来刷数据。
+
+**心跳 / Heartbeat：** 客户端定期向服务端上报钩子安装状态，让管理员可以检测钩子是否被悄悄移除（强化点 H3）。
+
+**本地数据库权限 / Local database permissions：** `~/.aitrack/records.db` 和 `~/.aitrack/config.toml` 均以 0600 权限创建。在多用户机器上，其他操作系统用户无法读取这些文件。
 
 ---
 
-*This document is versioned alongside the software. If the collection scope changes — particularly for the planned Phase 4 prompt summary hash — this document will be updated before the release ships.*
+## 10. 联系与反馈 / Contact and Feedback
+
+如果您对数据处理方式有疑问、发现安全问题，或希望对本文档提出改进建议：
+
+- 在 aitrack GitHub 仓库提 issue
+- 或直接联系仓库维护者
+
+对于安全漏洞，请遵循仓库根目录 `SECURITY.md` 中描述的负责任披露流程。
+
+---
+
+*本文档随软件版本一同维护。如果采集范围发生变更——尤其是计划中的 Phase 4 prompt 摘要哈希——本文档将在版本发布前更新。*

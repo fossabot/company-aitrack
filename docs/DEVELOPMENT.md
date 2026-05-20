@@ -1,66 +1,66 @@
-# Development Guide
+# 开发指南 / Development Guide
 
-## Who This Is For
+## 适用读者 / Who This Is For
 
-This guide is for engineers contributing to AiTrack. It covers local environment setup, build and test commands for each component, coverage tooling, E2E test execution, and the three-way sync requirement when the protocol changes.
-
----
-
-## Local Environment Requirements
-
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Rust / Cargo | stable (1.82+ recommended) | Client build and tests |
-| JDK | 17+ | Java server (use Docker build if JDK not installed locally) |
-| Maven | 3.8+ | Java server build |
-| Go | 1.24+ | Go server build and tests |
-| Docker | 20+ | Cross-platform builds, Java builds, E2E tests |
-| sqlite3 CLI | any | E2E test verification of local DB |
-| git | any | Client git metadata extraction |
-
-**Note**: The Java server (Spring Boot 3.3.8) requires JDK 17. If JDK is not installed locally, all Java-related operations must be done inside Docker (see "Building via Docker" below).
+本指南面向参与 AiTrack 开发的工程师。内容涵盖本地环境配置、各组件的构建与测试命令、覆盖率工具、E2E 测试执行，以及协议变更时的三端同步要求。
 
 ---
 
-## Client (Rust)
+## 本地环境要求 / Local Environment Requirements
+
+| 工具 | 版本 | 用途 |
+|------|------|------|
+| Rust / Cargo | stable（推荐 1.82+） | 客户端构建与测试 |
+| JDK | 17+ | Java 服务端（本机未安装 JDK 时使用 Docker 构建） |
+| Maven | 3.8+ | Java 服务端构建 |
+| Go | 1.24+ | Go 服务端构建与测试 |
+| Docker | 20+ | 跨平台构建、Java 构建、E2E 测试 |
+| sqlite3 CLI | 任意版本 | E2E 测试时验证本地数据库 |
+| git | 任意版本 | 客户端 git 元数据提取 |
+
+**注意**：Java 服务端（Spring Boot 3.3.8）要求 JDK 17。若本机未安装 JDK，所有 Java 相关操作须在 Docker 内完成（见下文"通过 Docker 构建"）。
+
+---
+
+## 客户端（Rust）/ Client (Rust)
 
 ```bash
 cd client/
 
-# Debug build
+# Debug 构建
 cargo build
 
-# Release build
+# Release 构建
 cargo build --release
 
-# Run tests
+# 运行测试
 cargo test
 
-# Coverage measurement (install cargo-llvm-cov first)
+# 覆盖率测量（需先安装 cargo-llvm-cov）
 cargo install cargo-llvm-cov
 cargo llvm-cov --summary-only
 
-# Coverage detail (HTML report)
+# 覆盖率详情（HTML 报告）
 cargo llvm-cov --open
 ```
 
-Coverage threshold: LINE ≥ 90%. Docker builds fail if this is not met.
+覆盖率门槛：行覆盖 ≥ 90%。Docker 构建未达标时失败。
 
-### CLI Commands
+### CLI 命令 / CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `aitrack capture` | Parse a hook event from stdin and record the edit |
-| `aitrack prompt-capture` | Record a UserPromptSubmit event from stdin |
-| `aitrack heartbeat` | Force-send a heartbeat immediately |
-| `aitrack status` | Print config, device_id, and sync stats |
-| `aitrack inspect` | Query local records.db |
-| `aitrack init` | Initialize config.toml and install hooks |
-| `aitrack update` | Download and verify the latest binary (ed25519-signed) |
+| 命令 | 说明 |
+|------|------|
+| `aitrack capture` | 从 stdin 解析钩子事件并记录编辑 |
+| `aitrack prompt-capture` | 从 stdin 记录 UserPromptSubmit 事件 |
+| `aitrack heartbeat` | 立即强制发送一次心跳 |
+| `aitrack status` | 打印配置、device_id 和同步统计 |
+| `aitrack inspect` | 查询本地 records.db |
+| `aitrack init` | 初始化 config.toml 并安装钩子 |
+| `aitrack update` | 下载并验证最新二进制（ed25519 签名） |
 
-#### `aitrack update` — Self-Update Command
+#### `aitrack update` — 自更新命令 / Self-Update Command
 
-`aitrack update` fetches the latest release binary and verifies it before replacing the running binary:
+`aitrack update` 获取最新版本二进制并在替换当前运行的二进制前进行验证：
 
 ```
 1. GET <api_url>/api/v1/ai-track/release/latest  → { version, download_url, signature_url }
@@ -71,16 +71,16 @@ Coverage threshold: LINE ≥ 90%. Docker builds fail if this is not met.
 5. Atomic rename: tempfile → current binary path (via std::fs::rename)
 ```
 
-The ed25519 public key is compiled into the binary at build time (`include_bytes!`). A tampered binary or mismatched signature causes a hard abort — the old binary is not replaced.
+ed25519 公钥在构建时编译进二进制（`include_bytes!`）。二进制被篡改或签名不匹配时直接中止，旧二进制不会被替换。
 
-### Rust Client Module Structure (Sprint 2 Hexagonal)
+### Rust 客户端模块结构（Sprint 2 六边形）/ Rust Client Module Structure (Sprint 2 Hexagonal)
 
 ```
 client/src/
 ├── main.rs / cli.rs / config.rs / lib.rs   — command dispatch, config, entry point
 ├── git.rs / init.rs / uploader.rs / heartbeat.rs / update.rs
 │
-├── domain/        ← Pure domain logic, zero infrastructure deps
+├── domain/        ← 纯领域逻辑，零基础设施依赖
 │   ├── model.rs   ← EditRecord, ApiConfig and other core domain models
 │   ├── crypto.rs  ← HMAC-SHA256, record_sig, request signing
 │   ├── diff.rs    ← Myers/LCS diff (similar crate)
@@ -98,37 +98,37 @@ client/src/
 │   └── event/     ← claude/codex/cursor adapters
 │       └── mod.rs / claude.rs / codex.rs / cursor.rs
 │
-└── testkit/factories.rs   ← Seed-deterministic test factories
+└── testkit/factories.rs   ← 种子确定性测试工厂
 ```
 
-### Test Coverage by Module
+### 各模块测试覆盖率 / Test Coverage by Module
 
-| Module | Tests (Sprint 2) | Line Coverage |
-|--------|---------|---------------|
+| 模块 | 测试数（Sprint 2） | 行覆盖率 |
+|------|---------|---------|
 | `domain/` | — | ≥ 90% |
 | `port/` | — | ≥ 90% |
-| `adapter/sqlite/`, `adapter/http/`, `adapter/event/` | — | ≥ 90% |
+| `adapter/sqlite/`、`adapter/http/`、`adapter/event/` | — | ≥ 90% |
 | `config.rs` / `git.rs` / `init.rs` / `uploader.rs` / `update.rs` / ... | — | ≥ 90% |
-| **TOTAL** | **291** | **90.71% LINE** |
+| **合计** | **291** | **90.71% 行覆盖** |
 
-> After the Sprint 2 hexagonal architecture refactor, tests were reorganized with the domain modules. Total test count increased from 143 to 291. Run `cargo llvm-cov --summary-only` for the latest per-module breakdown.
+> Sprint 2 六边形架构重构后，测试随领域模块重新组织。总测试数从 143 增至 291。运行 `cargo llvm-cov --summary-only` 查看最新的各模块明细。
 
-All tests are `#[cfg(test)]` inline modules. HTTP mocking uses `wiremock`; temporary files use `tempfile`.
+所有测试均为 `#[cfg(test)]` 内联模块。HTTP mock 使用 `wiremock`，临时文件使用 `tempfile`。
 
-#### sqlite-vec (optional vector extension)
+#### sqlite-vec（可选向量扩展）/ sqlite-vec (Optional Vector Extension)
 
-The `client/src/db/vec.rs` module registers sqlite-vec via `sqlite3_auto_extension` at DB-open time. If the extension probe (`SELECT vec_version()`) fails, the `VEC_DISABLED` global is set and all vector operations are skipped — the core capture pipeline is unaffected.
+`client/src/db/vec.rs` 模块在数据库打开时通过 `sqlite3_auto_extension` 注册 sqlite-vec。若扩展探针（`SELECT vec_version()`）失败，全局 `VEC_DISABLED` 置为 true，所有向量操作跳过——核心捕获流程不受影响。
 
-To verify sqlite-vec loaded correctly:
+验证 sqlite-vec 是否正常加载：
 ```bash
-./target/debug/aitrack status   # logs "sqlite-vec loaded: v0.1.x" at DEBUG level
+./target/debug/aitrack status   # 在 DEBUG 级别打印 "sqlite-vec loaded: v0.1.x"
 ```
 
-The `vec_records` virtual table (`vec0`, `float[384]`) is created automatically when vec is enabled. Embeddings are not populated until Phase DB-3.
+`vec_records` 虚拟表（`vec0`，`float[384]`）在 vec 启用时自动创建。向量在 Phase DB-3 之前不会填充。
 
-### Testkit Factories
+### Testkit 工厂 / Testkit Factories
 
-`src/testkit/factories.rs` provides seed-deterministic builders:
+`src/testkit/factories.rs` 提供种子确定性构建器：
 
 ```rust
 // Valid instances
@@ -146,42 +146,42 @@ let big = tampered_oversized_lines(1);  // added_lines = 99,999,999
 
 ---
 
-## Java Server
+## Java 服务端 / Java Server
 
 ```bash
 cd server-java/
 
-# Run tests (unit + integration, H2 in-memory)
+# 运行测试（单元 + 集成，H2 内存库）
 mvn test
 
-# Run tests + coverage verification (LINE ≥ 90% threshold)
+# 运行测试 + 覆盖率验证（行覆盖 ≥ 90% 门槛）
 mvn verify
 
-# Start dev server
+# 启动开发服务器
 mvn spring-boot:run
 # → http://localhost:8080
-# → H2 console: http://localhost:8080/h2-console
+# → H2 控制台: http://localhost:8080/h2-console
 ```
 
-JaCoCo HTML report: `target/site/jacoco/index.html`
+JaCoCo HTML 报告：`target/site/jacoco/index.html`
 
 #### PostgreSQL / ParadeDB profile
 
 ```bash
-# Run with postgres profile (requires ParadeDB running on localhost:5432)
+# 使用 postgres profile 运行（需要 ParadeDB 在 localhost:5432 运行）
 SPRING_PROFILES_ACTIVE=postgres mvn spring-boot:run
 ```
 
-### Building via Docker (when JDK is not installed locally)
+### 通过 Docker 构建（本机未安装 JDK 时）/ Building via Docker (when JDK is not installed locally)
 
 ```bash
-# Run from project root
+# 从项目根目录运行
 docker build -f docker/Dockerfile.server-java -t aitrack-server-java:latest .
 ```
 
-`mvn verify` is run automatically during the build; the build fails if coverage is insufficient.
+构建过程中自动运行 `mvn verify`；覆盖率不足时构建失败。
 
-### Testkit Factories
+### Testkit 工厂 / Testkit Factories
 
 ```java
 // Valid instances
@@ -197,33 +197,33 @@ EditDto bad = TamperedFactory.nullTool();
 
 ---
 
-## Go Server
+## Go 服务端 / Go Server
 
 ```bash
 cd server-go/
 
-# Build
+# 构建
 go build ./...
 
-# Run (SQLite stored at ./data/aitrack.db by default, port 8080)
+# 运行（SQLite 默认存储在 ./data/aitrack.db，端口 8080）
 go run .
 
-# Run tests
+# 运行测试
 go test -ldflags=-linkmode=external ./... -cover
 
-# On Linux/Docker (no Darwin dyld issues)
+# Linux/Docker 上运行（无 Darwin dyld 问题）
 go test ./... -coverprofile=cover.out
 go tool cover -func=cover.out | tail -1
 
-# Build via Docker
+# 通过 Docker 构建
 docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest .
 ```
 
-Coverage threshold: total ≥ 90%. Docker builds fail if this is not met. Current coverage: **95.3%**.
+覆盖率门槛：total ≥ 90%。Docker 构建未达标时失败。当前覆盖率：**95.3%**。
 
-### testapp Package — In-Process Integration Testing
+### testapp 包 — 进程内集成测试 / testapp Package — In-Process Integration Testing
 
-`server-go/testapp/` exports a lightweight wiring layer for integration tests that need a live HTTP router without Docker:
+`server-go/testapp/` 为需要真实 HTTP router 而不使用 Docker 的集成测试提供轻量级装配层：
 
 ```go
 import "github.com/your-org/aitrack/server-go/testapp"
@@ -240,9 +240,9 @@ func TestChainIntegration(t *testing.T) {
 }
 ```
 
-`MemoryConfig` returns a `config.Config` with `DSN=":memory:"` and the provided admin key, bypassing Go's `internal` package restriction so test files outside `server-go/internal/` can wire up a real server.
+`MemoryConfig` 返回 `DSN=":memory:"` 和指定 admin key 的 `config.Config`，绕过 Go 的 `internal` 包限制，使 `server-go/internal/` 之外的测试文件也能装配真实服务器。
 
-### Testkit Factories
+### Testkit 工厂 / Testkit Factories
 
 ```go
 tok := testkit.BuildToken()
@@ -256,41 +256,41 @@ exp := testkit.ExpiredTimestampEditDTO()
 big := testkit.OversizedEditDTO()
 ```
 
-#### ParadeDB local dev
+#### 本地 ParadeDB 开发 / ParadeDB local dev
 
-To run the Go server against a local ParadeDB instance:
+运行 Go 服务端对接本地 ParadeDB 实例：
 ```bash
 DATABASE_URL=postgres://aitrack:aitrack_secret@localhost:5432/aitrack go run .
 ```
-Without `DATABASE_URL`, the server falls back to embedded SQLite (default for local dev).
+不设置 `DATABASE_URL` 时，服务端回退到内嵌 SQLite（本地开发默认值）。
 
 ---
 
-## E2E Tests
+## E2E 测试 / E2E Tests
 
-The E2E test suite lives in `e2e/` and runs one pass against each of the Java and Go implementations, proving protocol compatibility.
+E2E 测试套件位于 `e2e/`，分别针对 Java 和 Go 实现各运行一轮，验证协议兼容性。
 
-### Go runner (simulated client)
+### Go runner（模拟客户端）/ Go runner (simulated client)
 
 ```bash
-# From project root
+# 从项目根目录运行
 bash e2e/run.sh both   # Java + Go
-bash e2e/run.sh java   # Java only
-bash e2e/run.sh go     # Go only
+bash e2e/run.sh java   # 仅 Java
+bash e2e/run.sh go     # 仅 Go
 ```
 
-The script automatically builds three Docker images, starts server containers, runs tests, and tears down containers.
+脚本自动构建三个 Docker 镜像，启动服务端容器，运行测试，最后销毁容器。
 
-### Real Rust Binary E2E
+### 真实 Rust 二进制 E2E / Real Rust Binary E2E
 
 ```bash
-# Requires: cargo, sqlite3, curl, git, python3, uuidgen installed locally
+# 需要本地安装：cargo、sqlite3、curl、git、python3、uuidgen
 bash e2e/run-client-e2e.sh both
 ```
 
-Tests use a temporary `AITRACK_HOME` directory and do not touch `~/.aitrack/` or `~/.claude/`.
+测试使用临时 `AITRACK_HOME` 目录，不会触碰 `~/.aitrack/` 或 `~/.claude/`。
 
-### docker-compose E2E (for CI)
+### docker-compose E2E（用于 CI）/ docker-compose E2E (for CI)
 
 ```bash
 docker compose -f docker/docker-compose.e2e.yml --profile java up --abort-on-container-exit
@@ -299,27 +299,27 @@ docker compose -f docker/docker-compose.e2e.yml --profile go up --abort-on-conta
 
 ---
 
-## Coverage Summary
+## 覆盖率汇总 / Coverage Summary
 
-| Component | Tool | Command | Threshold | Current (v1.6.0) |
-|-----------|------|---------|-----------|-----------------|
-| Rust client | cargo-llvm-cov | `cargo llvm-cov --summary-only` | LINE ≥ 90% | **90.71%** |
-| Java server | JaCoCo | `mvn verify` | LINE ≥ 90% | **LINE ≥ 90%** |
-| Go server | go cover | `go tool cover -func cover.out` | total ≥ 90% | **95.3%** |
+| 组件 | 工具 | 命令 | 门槛 | 当前值（v1.6.0） |
+|------|------|------|------|-----------------|
+| Rust 客户端 | cargo-llvm-cov | `cargo llvm-cov --summary-only` | 行覆盖 ≥ 90% | **90.71%** |
+| Java 服务端 | JaCoCo | `mvn verify` | 行覆盖 ≥ 90% | **LINE ≥ 90%** |
+| Go 服务端 | go cover | `go tool cover -func cover.out` | total ≥ 90% | **95.3%** |
 
-All three component Docker builds embed the coverage check; builds fail if the threshold is not met.
+三个组件的 Docker 构建均内嵌覆盖率检查，不达标则构建失败。
 
 ---
 
-## Protocol Change Rules
+## 协议变更规则 / Protocol Change Rules
 
-`CONTRACT.md` is the single source of truth shared by the Rust client, Java server, and Go server. Any protocol change must be synchronized across all three:
+`CONTRACT.md` 是 Rust 客户端、Java 服务端和 Go 服务端共同遵守的单一可信来源（SSoT）。任何协议变更必须同步更新三端：
 
-1. **Update `CONTRACT.md`**: bump version, describe the change
-2. **Update Rust client**: `crypto.rs` (record_sig canonical string), corresponding adapter, uploader
-3. **Update Java server**: `SignatureService` (canonical string), `EditDto` (fields), related tests
-4. **Update Go server**: `service/signature.go` (canonical string), `model` (fields), related tests
-5. **Update E2E factory**: `ComputeRecordSig` in `e2e/factory/factory.go`
-6. **Run the E2E suite** to verify three-way compatibility
+1. **更新 `CONTRACT.md`**：升级版本号，描述变更内容
+2. **更新 Rust 客户端**：`crypto.rs`（record_sig 规范字符串）、对应适配器、uploader
+3. **更新 Java 服务端**：`SignatureService`（规范字符串）、`EditDto`（字段）、相关测试
+4. **更新 Go 服务端**：`service/signature.go`（规范字符串）、`model`（字段）、相关测试
+5. **更新 E2E 工厂**：`e2e/factory/factory.go` 中的 `ComputeRecordSig`
+6. **运行 E2E 套件**，验证三端兼容性
 
-The field order and `\n` separators in the `record_sig` canonical string must be byte-identical across all three components. See the Record Signature section in `CONTRACT.md`.
+`record_sig` 规范字符串中的字段顺序和 `\n` 分隔符必须在三端字节完全一致。详见 `CONTRACT.md` 的记录签名章节。
