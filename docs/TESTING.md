@@ -17,9 +17,10 @@ Integration Tests
   └── HTTP end-to-end (mock server / MockMvc)
 
 E2E Tests
-  ├── Runs inside real Docker containers
+  ├── Runs inside real Docker containers (bash e2e/run.sh)
   ├── One pass each for Java and Go servers
-  └── Covers the full chain from token issuance to stats queries
+  ├── Covers the full chain from token issuance to stats queries
+  └── Real-chain integration tests (chain_integration_test.go): Go router + in-memory SQLite, no Docker
 ```
 
 ---
@@ -203,6 +204,9 @@ docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest . 2>&1 |
 
 # E2E (one pass for Java + Go)
 bash e2e/run.sh both
+
+# Real-chain integration tests (no Docker, direct Go test)
+cd e2e && go test ./... -run TestReal -v
 ```
 
 ---
