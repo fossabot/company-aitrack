@@ -47,6 +47,9 @@ tmp/
 *.tmp
 *.bak
 
+# ── Internal-only files (Codeup only) ──
+CLAUDE.md
+
 # ── Environment / secrets ──────────────────────────────────────────────────────
 .env
 .env.*
