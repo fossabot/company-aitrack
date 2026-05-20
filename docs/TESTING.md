@@ -1,52 +1,52 @@
-# 统一测试工厂与覆盖率说明
+# Testing: Unified Test Factories and Coverage
 
-本文档描述 aitrack 三个组件的测试体系、工厂模式、覆盖率门槛和 Docker 内验证流程。
+This document describes the test architecture, factory pattern, coverage thresholds, and Docker verification flow for all three aitrack components.
 
 ---
 
-## 三层测试架构
+## Three-Tier Test Architecture
 
 ```
-单元测试 (Unit)
-  ├── 纯函数、业务逻辑、HMAC 规范值
-  └── 不依赖网络/DB（wiremock/H2/SQLite-内存）
+Unit Tests
+  ├── Pure functions, business logic, HMAC canonical values
+  └── No network/DB dependencies (wiremock / H2 / SQLite in-memory)
 
-集成测试 (Integration)
-  ├── 完整 Spring 上下文 + H2 内存库（Java）
-  ├── 真实 SQLite（Go）
-  └── HTTP 端到端（mock server / MockMvc）
+Integration Tests
+  ├── Full Spring context + H2 in-memory (Java)
+  ├── Real SQLite (Go)
+  └── HTTP end-to-end (mock server / MockMvc)
 
-E2E 测试
-  ├── 真实 Docker 容器内运行
-  ├── Java 和 Go 服务端各跑一轮
-  └── 覆盖从签发 Token 到统计查询的完整链路
+E2E Tests
+  ├── Runs inside real Docker containers
+  ├── One pass each for Java and Go servers
+  └── Covers the full chain from token issuance to stats queries
 ```
 
 ---
 
-## 覆盖率门槛（90%）
+## Coverage Thresholds (90%)
 
-| 组件 | 测量方式 | 失败行为 |
-|---|---|---|
-| **Rust 客户端** | `cargo llvm-cov --summary-only` → 解析 `TOTAL` 行 | 低于 90% 构建失败 |
-| **Java 服务端** | JaCoCo `LINE COVEREDRATIO >= 0.90`（pom.xml `verify` 阶段） | 低于 90% 构建失败 |
-| **Go 服务端** | `go tool cover -func cover.out` → 解析 `total` 行 | 低于 90% 构建失败 |
+| Component | Measurement | Failure behavior | Current (v1.6.0) |
+|-----------|------------|-----------------|-----------------|
+| **Rust client** | `cargo llvm-cov --summary-only` → parse `TOTAL` line | Build fails below 90% | **90.71%** |
+| **Java server** | JaCoCo `LINE COVEREDRATIO >= 0.90` (pom.xml `verify` phase) | Build fails below 90% | **LINE ≥ 90%** |
+| **Go server** | `go tool cover -func cover.out` → parse `total` line | Build fails below 90% | **95.3%** |
 
 ---
 
-## 测试工厂模式（三语言）
+## Test Factory Pattern (Three Languages)
 
-所有工厂都遵循同一约定：
+All factories follow the same conventions:
 
-1. **确定性（Seed-based）**：给定相同种子，每次生成相同数据
-2. **Builder 风格**：默认合法实例 + 字段级覆盖
-3. **负例工厂**：明确命名的篡改方法（`tampered_*`, `Tampered*`）
-4. **HMAC 内嵌**：工厂内部计算正确的 `record_sig`，保证默认实例通过签名验证
+1. **Deterministic (seed-based)**: given the same seed, the same data is produced every time
+2. **Builder style**: default valid instance + field-level overrides
+3. **Negative factories**: explicitly named tamper methods (`tampered_*`, `Tampered*`)
+4. **HMAC embedded**: the factory computes the correct `record_sig` internally so default instances pass signature verification
 
-### Rust（`client/src/testkit/factories.rs`）
+### Rust (`client/src/testkit/factories.rs`)
 
 ```rust
-// 合法实例
+// Valid instances
 let rec = EditRecordFactory::new(42).with_tool("claude").build();
 let cfg = ApiConfigFactory::new(42).with_hmac_secret("secret").build();
 
@@ -55,82 +55,112 @@ let json = ClaudeHookPayloadFactory::new(1).build_json();
 let json = CodexHookPayloadFactory::new(2).build_json();
 let json = CursorHookPayloadFactory::new(3).build_json();
 
-// 负例
-let bad = tampered_record_sig(1);       // record_sig 被清零
+// Negative cases
+let bad = tampered_record_sig(1);        // record_sig zeroed
 let exp = tampered_expired_timestamp(1); // timestamp = 2000-01-01
 let big = tampered_oversized_lines(1);  // added_lines = 99,999,999
 ```
 
-### Java（`server-java/src/test/java/com/aitrack/server/testkit/`）
+### Java (`server-java/src/test/java/com/aitrack/server/testkit/`)
 
 ```java
-// 合法实例
+// Valid instances
 EditDto dto = EditDtoFactory.build();
 EditDto dto = EditDtoFactory.with(e -> e.setTool("codex"));
 EditDto dto = EditDtoFactory.buildForTool("cursor");
 
-// 负例
+// Negative cases
 EditDto bad = TamperedFactory.badRecordSig();
 EditDto bad = TamperedFactory.oversizedAddedLines();
 EditDto bad = TamperedFactory.nullTool();
 
-// 上传请求
+// Batch request
 EditBatchRequest req = EditBatchRequestFactory.build(dto);
 
 // Token
 TokenEntity tok = TokenEntityFactory.build();
 ```
 
-### Go（`server-go/internal/testkit/factory.go`）
+### Go (`server-go/internal/testkit/factory.go`)
 
 ```go
-// 合法实例（函数选项风格）
+// Valid instances (functional options style)
 tok := testkit.BuildToken()
 dto := testkit.BuildEditDTO()
 req := testkit.BuildUploadRequest(tok, dto)
 hb  := testkit.BuildHeartbeatRequest()
 
-// 负例
+// Negative cases
 bad := testkit.TamperedEditDTO()
 exp := testkit.ExpiredTimestampEditDTO()
 big := testkit.OversizedEditDTO()
 mal := testkit.MalformedEditDTO()
 ```
 
-### E2E（`e2e/factory/factory.go`）
+### E2E (`e2e/factory/factory.go`)
 
 ```go
-// Payload 从 fixtures/prompts/ 提取的真实代码片段构造
+// Payload constructed from real code snippets extracted from fixtures/prompts/
 p := factory.DefaultEditParams(seed, tok)
 body := factory.BuildBatchRequest(deviceID, p.BuildDTO())
 hb   := factory.BuildHeartbeatRequest(deviceID, tokenKey, pendingCount)
 
-// 负例
+// Negative cases
 tampered := factory.TamperedRecordSig(p)
 oversized := factory.OversizedEdit(p)
 missing   := factory.MissingFieldEdit(p)
 
-// HMAC 规范串（与 CONTRACT.md 完全一致）
+// HMAC canonical string (exactly as defined in CONTRACT.md)
 sig := factory.ComputeRecordSig(secret, tokenKey, deviceID, ...)
 reqSig := factory.ComputeRequestSig(secret, unixTS, bodyBytes)
 ```
 
 ---
 
-## E2E 场景清单
+## E2E Scenario Coverage
 
-| 场景 | 覆盖的合约要求 |
-|---|---|
-| Admin token 鉴权 | 403 wrong key / 400 缺字段 / 200 正常签发 |
-| 契约层验证 | 401 无 auth / 错 token / 过期 ts / 错签名；400 空 edits |
-| 全链路 happy path | sign token → POST /edits → accepted=1 → GET → stats → devices |
-| 防作弊链路 | 篡改 record_sig → rejected；oversized → flagged；缺字段 → rejected |
-| 心跳链路 | POST /heartbeat → ok=true；devices 反映设备 |
-| Repo 白名单 | enforce=false 时未知 repo 被接受或标记（不硬拒绝） |
+| Scenario | Contract requirements covered |
+|----------|------------------------------|
+| Admin token auth | 403 wrong key / 400 missing field / 200 normal issuance |
+| Contract layer validation | 401 no auth / wrong token / expired ts / bad signature; 400 empty edits |
+| Full-chain happy path | sign token → POST /edits → accepted=1 → GET → stats → devices |
+| Anti-cheat chain | tampered record_sig → rejected; oversized → flagged; missing field → rejected |
+| Heartbeat chain | POST /heartbeat → ok=true; devices reflects device |
+| Repo allowlist | unknown repo accepted or flagged (not hard-rejected) when enforce=false |
+
+### chain_integration_test.go — In-Process Go Integration Tests (Sprint 2)
+
+`server-go/chain_integration_test.go` runs 3 full end-to-end scenarios against a real Go chi router with an in-memory SQLite database — no Docker, no network sockets required.
+
+**Setup via testapp package:**
+
+```go
+import "github.com/your-org/aitrack/server-go/testapp"
+
+func setupServer(t *testing.T) (string, string) {
+    adminKey := "integration-test-admin-key-32c"
+    cfg := testapp.MemoryConfig(adminKey)  // DSN=":memory:", no file I/O
+    handler, cleanup, _ := testapp.Build(cfg)
+    t.Cleanup(cleanup)
+    srv := httptest.NewServer(handler)
+    t.Cleanup(srv.Close)
+    return srv.URL, adminKey
+}
+```
+
+**Three covered scenarios:**
+
+| Scenario | What it proves |
+|----------|---------------|
+| Happy path | `POST /admin/tokens` → token issued; `POST /edits/batch` → `accepted=1`; `GET /edits` → record visible |
+| Tampered record_sig | Same flow but record_sig zeroed → `rejected: sig_mismatch`; record count unchanged |
+| Credential error (401) | Request signed with wrong hmac_secret → 401; no records written |
+
+These tests run as part of `go test ./...` with no extra flags and contribute to the 95.3% coverage figure.
 
 ---
 
-## Docker 内验证流程
+## Docker Verification Flow
 
 ```
 ┌───────────────────────────────────────────────────────┐
@@ -157,28 +187,28 @@ reqSig := factory.ComputeRequestSig(secret, unixTS, bodyBytes)
 └───────────────────────────────────────────────────────┘
 ```
 
-### 本机验证命令
+### Local verification commands
 
 ```bash
-cd company-aitrack
+# From project root
 
-# 客户端
+# Client
 docker build -f docker/Dockerfile.client -t aitrack-client:latest . 2>&1 | tail -20
 
-# Java 服务端
+# Java server
 docker build -f docker/Dockerfile.server-java -t aitrack-server-java:latest . 2>&1 | tail -20
 
-# Go 服务端
+# Go server
 docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest . 2>&1 | tail -20
 
-# E2E（Java + Go 各一轮）
+# E2E (one pass for Java + Go)
 bash e2e/run.sh both
 ```
 
 ---
 
-## 关键注意事项
+## Key Notes
 
-- **Java 构建必须在 Docker 内进行**：本机无 JDK 17/Maven，`Dockerfile.server-java` 使用 `maven:3.9-eclipse-temurin-17` 镜像完成全部构建和测试。
-- **Go 测试在 Linux 容器内无 CGO 问题**：`modernc.org/sqlite` 是纯 Go 实现，无需 cgo，`CGO_ENABLED=0` 构建。
-- **E2E 不修改真实编辑器配置**：所有操作在容器隔离环境中进行，不触碰 `~/.aitrack/`、`~/.claude/` 等目录。
+- **Java builds must run inside Docker**: JDK 17/Maven is not required locally; `Dockerfile.server-java` uses the `maven:3.9-eclipse-temurin-17` image for all build and test steps.
+- **Go tests have no CGO issues in Linux containers**: `modernc.org/sqlite` is a pure-Go implementation; `CGO_ENABLED=0` builds work cleanly.
+- **E2E does not modify real editor configuration**: all operations run in containerized or isolated environments and do not touch `~/.aitrack/`, `~/.claude/`, or similar directories.
