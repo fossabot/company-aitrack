@@ -54,6 +54,9 @@ CONTEXT.md
 CONTEXT-MAP.md
 PRD/
 plans/
+meetings/
+research/
+docs/README.md
 
 # ── Environment / secrets ──────────────────────────────────────────────────────
 .env
