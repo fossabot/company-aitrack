@@ -6,56 +6,90 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.0.
 
 ## [v1.6.0] — 2026-05-20
 
-### Added
+### 发布说明
 
-- **`aitrack update` subcommand** — ed25519 signature verification against hardcoded public key; fetches latest release from GitHub Releases API, downloads binary + `.sig`, verifies signature, atomically replaces current executable; startup assertion rejects all-zero placeholder key
-- **Keyword library tamper detection** — keywords hardcoded as compile-time constants; `keyword_fingerprint()` computes SHA256 and stores in `~/.aitrack/keywords.db` (WCDB multi-DB: `records.db` + `keywords.db`); mismatch triggers warning, binary copy is authoritative
-- **`server-go/testapp` package** — exports `Build()` + `MemoryConfig(adminKey)`, bypasses Go `internal` restriction; enables E2E and integration tests to spin up a real chi router with in-memory SQLite without an external process
-- **Real-chain E2E integration tests** (`e2e/chain_integration_test.go`) — `httptest.NewServer` backed by real Go chi router + in-memory SQLite; 3 scenarios: full happy path (accepted=3), tampered `record_sig` → rejected (`sig_mismatch`), no Bearer token → 401
-- **`domain/model/PageResult<T>`** (Java) — framework-agnostic `record PageResult<T>(List<T> content, long totalElements)`, replaces Spring `Page<T>` in `EditRecordPort`; zero Spring imports in domain layer
+v1.6.0（Sprint 2）完成三端完整六边形架构重构，新增 `aitrack update` ed25519 更新命令，实现真实 HTTP 上报（非 stub），并引入基于 in-memory SQLite 的 E2E 真实链路测试。
 
-### Changed
+### 新增
 
-- **Hexagonal architecture — fully wired across all three components (Sprint 2)**
-  - Rust client: deleted legacy `db/`, `adapters/`, `crypto.rs`, `diff.rs` shims (1 927 lines); `lib.rs` now routes through `StoragePort` (SqliteStorage) and `UploadPort` (HttpUploader); `uploader::flush_unsynced` accepts `&HttpUploader` and delegates HTTP POST to `HttpUploader::post_batch`; 233 tests pass, **90.71% line coverage**
-  - Go server: `StatsRow` moved from `domain/port` to `domain/model`; `IngestUsecase.saveEdit` now returns and propagates `error` (previously silently discarded); compile-time interface assertions (`var _ port.X = (*Y)(nil)`) on all three adapters; **95.3% total coverage**
-  - Java server: `EditRecordPort` uses `PageResult<T>` (no `org.springframework.data.domain` imports); field `editRecordRepository` renamed to `editRecordPort` in IngestService / StatsService / ValidationService; 218 tests pass, **LINE ≥ 90%**
-- **`HttpUploader::upload_batch`** — fully implemented (previously `Ok(())` stub); `build_payload` maps `Record` slice to wire JSON; `post_batch` returns `PostBatchResult` enum: `Success` / `TransientError` / `CredentialError` / `UnparseableOk`; 13 unit tests with wiremock
+- **`aitrack update` 子命令**：ed25519 签名验证（硬编码公钥）；从 GitHub Releases API 拉取最新版本，下载二进制 + `.sig`，验签后原子替换当前可执行文件；全零占位公钥触发启动断言拒绝
+- **关键词库防篡改检测**（Keyword tamper detection）：关键词以编译期常量硬编码；`keyword_fingerprint()` 计算 SHA256 并存入 `~/.aitrack/keywords.db`（WCDB 多库：`records.db` + `keywords.db`）；指纹不匹配时告警，二进制副本为权威来源
+- **`server-go/testapp` 包**：导出 `Build()` + `MemoryConfig(adminKey)`，绕过 Go `internal` 访问限制；E2E 和集成测试可无外部进程启动真实 chi router + in-memory SQLite
+- **真实链路 E2E 集成测试**（`e2e/chain_integration_test.go`）：`httptest.NewServer` 接入真实 Go chi router + in-memory SQLite；3 场景：完整 happy path（accepted=3）、篡改 `record_sig` → rejected（`sig_mismatch`）、无 Bearer token → 401
+- **`domain/model/PageResult<T>`**（Java）：框架无关 `record PageResult<T>(List<T> content, long totalElements)`，替代 `EditRecordPort` 中的 Spring `Page<T>`；domain 层零 Spring 导入
+
+### 变更
+
+- **六边形架构三端全量落地（Sprint 2）**
+  - Rust 客户端：删除遗留 `db/`、`adapters/`、`crypto.rs`、`diff.rs` shim 层（共 1 927 行）；`lib.rs` 全部通过 `StoragePort`（SqliteStorage）和 `UploadPort`（HttpUploader）路由；`uploader::flush_unsynced` 接收 `&HttpUploader` 并委托 HTTP POST 至 `HttpUploader::post_batch`
+  - Go 服务端：`StatsRow` 从 `domain/port` 迁移至 `domain/model`；`IngestUsecase.saveEdit` 现在返回并传播 `error`（原来静默丢弃）；三个适配器均添加编译期接口断言（`var _ port.X = (*Y)(nil)`）
+  - Java 服务端：`EditRecordPort` 使用 `PageResult<T>`（无 `org.springframework.data.domain` 导入）；字段 `editRecordRepository` 在 IngestService / StatsService / ValidationService 中统一重命名为 `editRecordPort`
+- **`HttpUploader::upload_batch` 真实实现**：从 `Ok(())` stub 升级为完整 HTTP POST 实现；`build_payload` 将 `Record` 切片映射为 wire JSON；`post_batch` 返回 `PostBatchResult` 枚举：`Success` / `TransientError` / `CredentialError` / `UnparseableOk`；含 13 个 wiremock 单元测试
+
+### 覆盖率
+
+| 组件 | 测试数 | 行覆盖率 |
+|------|--------|---------|
+| Rust 客户端 | 233 | 90.71% |
+| Java 服务端 | 218 | LINE ≥ 90% |
+| Go 服务端 | — | 95.3% |
 
 ---
 
 ## [v1.5.0] — 2026-05-20
 
-### Added
+### 发布说明
 
-- **Phase 4: Prompt Capture Pipeline**
-  - Client: installs `UserPromptSubmit` hook (Claude Code only) alongside `PostToolUse`; new `prompt-capture` subcommand stores user prompt text (≤512 chars) in local `prompt_context` SQLite table
-  - Client: `capture` flow attaches most recent session prompt as optional `prompt_summary` on each edit record
-  - DB: new `prompt_context` table (session_id, prompt_text, created_at); `prompt_summary TEXT` column added to `records` via migration
-  - Profile API: `prompt_patterns` dimension — keyword intent classification (generate/fix_debug/refactor/explain/test/other) from `prompt_summary` text
-  - Profile dimensions redesigned: `scenarios` → `languages` (file-extension based, 23 types) + `depth.comment_density` (ratio of comment lines in diff_hunk added lines)
-  - CONTRACT.md updated: `prompt-capture` command, `UserPromptSubmit` hook template, optional `prompt_summary` field, `prompt_patterns`/`languages`/`comment_density` in profile schema
-  - Rust 200 tests pass, Java 215 tests pass, Go all packages pass
+v1.5.0 完成 Phase 4 提示词捕获流水线：新增 `UserPromptSubmit` 钩子捕获用户提示词，`prompt_summary` 随编辑记录上报，服务端画像新增 `prompt_patterns` 意图分类维度。
+
+### 新增
+
+- **Phase 4：提示词捕获流水线**（Prompt Capture Pipeline）
+  - 客户端：与 `PostToolUse` 并行安装 `UserPromptSubmit` 钩子（仅限 Claude Code）；新增 `prompt-capture` 子命令，将用户提示词（≤512 字符）存入本地 `prompt_context` SQLite 表
+  - 客户端：`capture` 流程将最近一条 session 提示词作为可选 `prompt_summary` 附加到编辑记录
+  - 数据库：新增 `prompt_context` 表（session_id, prompt_text, created_at）；`records` 表通过迁移新增 `prompt_summary TEXT` 列
+  - 画像 API：`prompt_patterns` 维度 — 基于 `prompt_summary` 文本的关键词意图分类（generate / fix_debug / refactor / explain / test / other）
+  - 画像维度重设计：`scenarios` → `languages`（基于文件扩展名，23 种类型）+ `depth.comment_density`（diff_hunk 新增行中注释行比例）
+  - `CONTRACT.md` 更新：`prompt-capture` 命令、`UserPromptSubmit` 钩子模板、可选 `prompt_summary` 字段、`prompt_patterns` / `languages` / `comment_density` 画像 schema
+
+### 覆盖率
+
+| 组件 | 测试数 |
+|------|--------|
+| Rust 客户端 | 200 |
+| Java 服务端 | 215 |
+| Go 服务端 | 全量通过 |
 
 ---
 
 ## [v1.4.0] — 2026-05-19
 
-### Added
+### 发布说明
 
-- **Phase 3: Developer AI Usage Profiles**
-  - Java `ProfileController`: `GET /api/v1/ai-track/profiles/{token_key}`, X-Admin-Key auth
-  - Java `ProfileService`: on-demand three-dimensional profile (frequency/depth/scenarios/tools), `classifyScenario()` path heuristic
-  - Java `ProfileAggregationJob`: `@Scheduled(cron="0 0 2 * * *")` daily warm-up
-  - Go `ProfileHandler`: feature-equivalent to Java, same JSON schema
-  - `EditRecordRepository.findByTokenKeyAndStatusNot()`, `TokenRepository.findByTokenKeyAndActiveTrue()`
-  - `@EnableScheduling` added to `AiTrackServerApplication`
-  - 206 Java tests pass; Go total coverage 92.4%
+v1.4.0 完成 Phase 3 开发者 AI 工具使用画像：按需三维聚合（频率 / 深度 / 场景）+ 每日定时预热任务，Java 和 Go 双端功能完全对等。
 
-### Docs
+### 新增
 
-- `docs/PRIVACY.md` (both repos): data collection transparency document
-- `CONTRACT.md` §5: Phase 3 profile endpoint schema
+- **Phase 3：开发者 AI 工具使用画像**（Developer AI Usage Profiles）
+  - Java `ProfileController`：`GET /api/v1/ai-track/profiles/{token_key}`，X-Admin-Key 鉴权
+  - Java `ProfileService`：按需三维画像（使用频率 / 深度 / 场景 / 工具类型），`classifyScenario()` 路径启发式分类
+  - Java `ProfileAggregationJob`：`@Scheduled(cron="0 0 2 * * *")` 每日凌晨预热
+  - Go `ProfileHandler`：与 Java 功能完全对等，JSON schema 相同
+  - 新增 `EditRecordRepository.findByTokenKeyAndStatusNot()` 和 `TokenRepository.findByTokenKeyAndActiveTrue()`
+  - `AiTrackServerApplication` 添加 `@EnableScheduling`
+  - `CONTRACT.md` §5 更新：Phase 3 画像端点完整 schema
+
+### 文档
+
+- `docs/PRIVACY.md`（两仓库同步）：数据采集透明度说明
+- `CONTRACT.md` §5：Phase 3 画像端点 schema
+
+### 覆盖率
+
+| 组件 | 测试数 | 覆盖率 |
+|------|--------|--------|
+| Java 服务端 | 206 | — |
+| Go 服务端 | — | 92.4% |
 
 ---
 
