@@ -1,0 +1,41 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  claude-review:
+    name: Claude AI Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event.pull_request.draft == false &&
+      !contains(github.event.pull_request.changed_files, 'claude-code-review.yml')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-5
+          track_progress: "true"
+          use_sticky_comment: "true"
+          exclude_patterns: "MapleEve,github-actions,codecov,dependabot"
+          allowed_tools: |
+            Bash(cargo fmt --manifest-path client/Cargo.toml -- --check)
+            Bash(cargo clippy --manifest-path client/Cargo.toml -- -D warnings)
+            Bash(cd server-go && go vet ./...)
+            Bash(cd server-go && go build ./...)
+            Bash(cd server-java && mvn verify -q -pl .)
+            Bash(rg:*)
+            Bash(git diff:*)
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}

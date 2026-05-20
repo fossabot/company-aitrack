@@ -1,0 +1,47 @@
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude:
+    name: Claude Response
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      github.event_name == 'issues'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Claude Response
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GH_TOKEN }}
+          model: claude-sonnet-4-5
+          allowed_tools: |
+            Bash(cargo fmt --manifest-path client/Cargo.toml -- --check)
+            Bash(cargo clippy --manifest-path client/Cargo.toml -- -D warnings)
+            Bash(cd server-go && go vet ./...)
+            Bash(cd server-java && mvn verify -q)
+            Bash(rg:*)
+            Bash(git status:*)
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
