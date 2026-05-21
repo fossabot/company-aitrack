@@ -227,6 +227,43 @@ E2E 运行中注意 `X-AiTrack-Timestamp` 的 300 秒时间窗口——测试环
 - 公开 Issue / PR 中不要粘贴含有真实凭据的日志或请求体。
 - `hmac_secret`（credential 的后半部分）在服务端以 AES-256-GCM 加密存储（`HmacSecretEncryptor`），调试时可查看 `application.yml` 中的加密密钥配置。
 
+## 版本发布流程
+
+aitrack 客户端通过 GitHub Releases 分发二进制，ed25519 签名保证更新可信性。
+
+**版本策略：v1.0.0 起仅允许 patch 自增（v1.0.x → v1.0.x+1），不允许 minor / major 跳跃。**
+
+### 发布步骤
+
+1. **修改版本号** — 仅修改 patch 位：
+   ```bash
+   # 例：1.0.0 → 1.0.1
+   # 编辑 client/Cargo.toml，修改 version = "1.0.1"
+   ```
+
+2. **更新 CHANGELOG.md** — 在 `## [Unreleased]` 下添加 `## [v1.0.x] — YYYY-MM-DD` 条目。
+
+3. **Commit**：
+   ```bash
+   git add client/Cargo.toml CHANGELOG.md
+   git commit -m "chore(release): bump version to v1.0.x"
+   git push origin main
+   ```
+
+4. **Tag（触发 CI 发布）**：
+   ```bash
+   git tag -a "v1.0.x" -m "Release v1.0.x"
+   git push origin "v1.0.x"
+   ```
+
+5. **确认 CI**：`release.yml` 自动为 4 个平台构建二进制，ed25519 签名，发布到 GitHub Releases。
+
+### 签名密钥管理
+
+- ed25519 公钥嵌入在 `client/src/update.rs` 的 `ED25519_PUBKEY_BASE64` 常量中。
+- 对应私钥存储为 GitHub Secret `RELEASE_SIGNING_KEY`（32 字节原始格式的 base64 编码）。
+- **禁止轮换密钥**：已发布的客户端使用嵌入的公钥验证更新；更换密钥会导致所有已部署客户端的 `aitrack update` 无法通过验证。
+
 ### 分支规范
 
 - 主干：`main`

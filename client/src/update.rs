@@ -17,12 +17,11 @@ use std::fs;
 pub const GITHUB_RELEASES_API: &str =
     "https://api.github.com/repos/MapleEve/company-aitrack/releases/latest";
 
-/// ed25519 public key — placeholder until release signing is configured.
-/// Replace with the actual base64-encoded 32-byte verifying key before release.
-/// Generate with: `ed25519-dalek::SigningKey::generate(&mut OsRng).verifying_key()`
-/// then base64-encode the raw 32-byte representation.
+/// ed25519 public key used to verify release binary signatures.
+/// Corresponds to the RELEASE_SIGNING_KEY secret in the GitHub repository.
+/// Generated 2026-05-21; do not rotate — see CONTRIBUTING.md § 签名密钥管理.
 pub const ED25519_PUBKEY_BASE64: &str =
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; // 32-byte placeholder — replace before release
+    "u52DS9INW/U2cjc0DeJnKz/8Z9Fg0mnhf1DD21ZWDkY=";
 
 // ---------------------------------------------------------------------------
 // GitHub Releases API response types
@@ -331,15 +330,12 @@ mod tests {
         );
     }
 
-    /// The default `ED25519_PUBKEY_BASE64` constant is also all-zeros and must be
-    /// rejected at the `load_verifying_key` boundary.
+    /// The shipped `ED25519_PUBKEY_BASE64` constant must be a valid (non-zero) key.
     #[test]
-    fn test_default_pubkey_constant_is_placeholder() {
+    fn test_default_pubkey_constant_is_valid() {
+        // The shipped public key must not be the all-zero placeholder.
         let result = load_verifying_key(ED25519_PUBKEY_BASE64);
-        assert!(
-            result.is_err(),
-            "ED25519_PUBKEY_BASE64 should be placeholder and must be rejected"
-        );
+        assert!(result.is_ok(), "ED25519_PUBKEY_BASE64 must be a valid key: {:?}", result.err());
     }
 
     // -----------------------------------------------------------------------
