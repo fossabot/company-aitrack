@@ -67,7 +67,7 @@ aitrack consists of three independent components communicating via Protocol v1.2
 |-----------|-------|----------------|
 | **Rust client** `aitrack` | Rust · single binary · no runtime dependencies | Install hooks, capture edit events, HMAC signing, upload data |
 | **Java server** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10-step validation chain, trusted attribution, effectiveness queries (primary implementation) |
-| **Go server** `aitrack-server-go` | Go 1.25 · chi v5.2.5 · ParadeDB (production) | Feature-equivalent lightweight alternative implementation |
+| **Go server** `aitrack-server-go` | Go 1.25 · chi v5.2.5 · SQLite / PostgreSQL | Feature-equivalent lightweight alternative implementation |
 
 **Protocol v1.2 key design:**
 
@@ -208,7 +208,7 @@ bash e2e/run.sh both
 | **Token hash storage** | Server stores only `sha256(token)` — plaintext returned only once at issuance |
 | **Local-first** | All data stored on self-hosted infrastructure, never passes through any third-party cloud service |
 | **Constant-time comparison** | HMAC verification uses constant-time comparison to prevent timing attacks |
-| **Minimal collection** | Collects file paths, change diffs (unified diff format, changed lines only), line counts, repo metadata, and an optional prompt summary (for tool-use classification); does not collect full conversation history or keyboard input |
+| **Minimal collection** | Collects only file paths, diffs, line counts, and repo metadata — no code content, conversations, or keyboard input |
 
 ---
 

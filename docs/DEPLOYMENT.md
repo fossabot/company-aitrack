@@ -43,7 +43,7 @@ docker build -f docker/Dockerfile.server-java -t aitrack-server-java:latest .
 docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest .
 ```
 
-- 构建阶段：`golang:1.25`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
+- 构建阶段：`golang:1.24`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
 - 运行时镜像：`gcr.io/distroless/base-debian12`（无 shell），监听端口 8080
 
 ---
@@ -115,7 +115,7 @@ docker compose -f docker/docker-compose.yml --profile java up -d
 | 服务 | 卷名 | 容器内路径 | 说明 |
 |------|------|-----------|------|
 | server-java | `aitrack-java-data` | `/app/data` | H2 数据库文件 |
-| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件（开发模式；生产环境通过 `DATABASE_URL` 使用 ParadeDB） |
+| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件 |
 
 删除卷（谨慎，将丢失所有数据）：
 
@@ -206,7 +206,7 @@ Reference: `server-java/src/main/resources/db-postgres-init.sql`.
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `DATABASE_URL` | *(required in prod)* | Full ParadeDB/PostgreSQL DSN, e.g. `postgres://user:pass@host:5432/db` — must be set in production; omitting uses SQLite dev mode |
+| `DATABASE_URL` | *(empty = SQLite)* | Full PostgreSQL DSN, e.g. `postgres://user:pass@host:5432/db` |
 
 ---
 
