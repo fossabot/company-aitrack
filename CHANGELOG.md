@@ -4,6 +4,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.0.
 
 ---
 
+## [CI] — 2026-05-21
+
+### Added
+
+- `.github/workflows/fossa.yml`: FOSSA license compliance scan, runs on push to `main` and weekly schedule
+- `.github/workflows/stale.yml`: disabled placeholder for stale issue/PR management (no-op until configured)
+
+---
+
 ## [v1.6.0] — 2026-05-20
 
 ### 发布说明
