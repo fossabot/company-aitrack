@@ -115,7 +115,7 @@ docker compose -f docker/docker-compose.yml --profile java up -d
 | 服务 | 卷名 | 容器内路径 | 说明 |
 |------|------|-----------|------|
 | server-java | `aitrack-java-data` | `/app/data` | H2 数据库文件 |
-| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件（开发模式；生产环境通过 `DATABASE_URL` 使用 ParadeDB） |
+| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件 |
 
 删除卷（谨慎，将丢失所有数据）：
 
@@ -148,65 +148,6 @@ spring:
     <artifactId>postgresql</artifactId>
 </dependency>
 ```
-
-### ParadeDB Mode (Phase DB-1)
-
-`docker/docker-compose.yml` ships a `db` service using `paradedb/paradedb:latest`. ParadeDB is a PostgreSQL-compatible image that adds BM25 full-text search (`pg_search`) and vector similarity (`pgvector`) — no extension installation needed; they are pre-loaded.
-
-**Quick start with ParadeDB:**
-
-```bash
-# 1. Start ParadeDB (healthcheck: pg_isready)
-docker compose up db -d
-
-# 2. Start Java server in postgres mode
-docker run --rm \
-  -e SPRING_PROFILES_ACTIVE=postgres \
-  -e AITRACK_DB_HOST=host.docker.internal \
-  -e AITRACK_DB_PORT=5432 \
-  -e AITRACK_DB_NAME=aitrack \
-  -e AITRACK_DB_USER=aitrack \
-  -e AITRACK_DB_PASSWORD=aitrack_secret \
-  -p 8080:8080 \
-  aitrack-server-java:latest
-
-# 3. Start Go server in postgres mode
-docker run --rm \
-  -e DATABASE_URL=postgres://aitrack:aitrack_secret@host.docker.internal:5432/aitrack \
-  -p 8081:8081 \
-  aitrack-server-go:latest
-```
-
-**One-time index creation** (run after first deploy, against the ParadeDB instance):
-
-```sql
--- BM25 full-text index (Phase DB-3 search endpoint prerequisite)
-CREATE INDEX IF NOT EXISTS edits_bm25 ON edit_records
-  USING bm25 (id, diff_hunk, prompt_summary) WITH (key_field = 'id');
-
--- HNSW vector index (activated when embeddings are backfilled in DB-3)
-CREATE INDEX IF NOT EXISTS edits_hnsw ON edit_records
-  USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;
-```
-
-Reference: `server-java/src/main/resources/db-postgres-init.sql`.
-
-**New environment variables (Java postgres profile):**
-
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `SPRING_PROFILES_ACTIVE` | *(empty = H2)* | Set to `postgres` to enable PostgreSQL mode |
-| `AITRACK_DB_HOST` | `localhost` | PostgreSQL/ParadeDB host |
-| `AITRACK_DB_PORT` | `5432` | Port |
-| `AITRACK_DB_NAME` | `aitrack` | Database name |
-| `AITRACK_DB_USER` | `aitrack` | Username |
-| `AITRACK_DB_PASSWORD` | `aitrack_secret` | Password |
-
-**New environment variables (Go server):**
-
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `DATABASE_URL` | *(required in prod)* | Full ParadeDB/PostgreSQL DSN, e.g. `postgres://user:pass@host:5432/db` — must be set in production; omitting uses SQLite dev mode |
 
 ---
 
