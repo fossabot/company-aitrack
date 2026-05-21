@@ -4,6 +4,8 @@
 
 这篇面向准备在私有服务器或容器环境中运行 AiTrack 服务端的系统管理员。当前重点是 Docker 私有部署。
 
+> 分阶段上线策略、里程碑规划、风险应对见 `plans/deployment.md`。
+
 ---
 
 ## 前提条件
@@ -43,7 +45,7 @@ docker build -f docker/Dockerfile.server-java -t aitrack-server-java:latest .
 docker build -f docker/Dockerfile.server-go -t aitrack-server-go:latest .
 ```
 
-- 构建阶段：`golang:1.24`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
+- 构建阶段：`golang:1.25`，执行 `go test ./...` + 覆盖率门槛 + `CGO_ENABLED=0 go build`
 - 运行时镜像：`gcr.io/distroless/base-debian12`（无 shell），监听端口 8080
 
 ---
@@ -88,8 +90,6 @@ docker compose -f docker/docker-compose.yml --profile go up -d
 | `AITRACK_MAX_ADDED_LINES` / `aitrack.max-added-lines` | `5000` | 单条记录 added_lines 上限，超出则 flagged: oversized |
 | `AITRACK_REPO_WHITELIST_ENFORCE` / `aitrack.repo-whitelist.enforce` | `false` | 是否强制拒绝白名单外的 repo_url |
 | `AITRACK_REPO_WHITELIST_URLS` / `aitrack.repo-whitelist.urls` | 空 | 允许的 repo URL 列表（逗号分隔 / YAML 列表） |
-| `AITRACK_MAX_BATCH_SIZE` / `aitrack.max-batch-size` | `500` | 单次上报 `edits` 数组上限，超出则 400 |
-| `AITRACK_MAX_REQUEST_BODY_BYTES` / `spring.servlet.multipart.max-request-size` (Java) / `aitrack.max-request-body-bytes` (Go) | `8388608`（8 MiB） | 请求体字节上限，超出则 413 |
 
 ### 通过 .env 文件配置
 
@@ -115,7 +115,7 @@ docker compose -f docker/docker-compose.yml --profile java up -d
 | 服务 | 卷名 | 容器内路径 | 说明 |
 |------|------|-----------|------|
 | server-java | `aitrack-java-data` | `/app/data` | H2 数据库文件 |
-| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件 |
+| server-go | `aitrack-go-data` | `/data` | SQLite 数据库文件（开发模式；生产环境通过 `DATABASE_URL` 使用 ParadeDB） |
 
 删除卷（谨慎，将丢失所有数据）：
 
@@ -149,17 +149,55 @@ spring:
 </dependency>
 ```
 
-### ParadeDB Mode (Phase DB-1)
+docker compose 方式切换（`docker-compose.prod.yml` 扩展配置）：
 
-`docker/docker-compose.yml` ships a `db` service using `paradedb/paradedb:latest`. ParadeDB is a PostgreSQL-compatible image that adds BM25 full-text search (`pg_search`) and vector similarity (`pgvector`) — no extension installation needed; they are pre-loaded.
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aitrack
+      POSTGRES_USER: aitrack
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitrack"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-**Quick start with ParadeDB:**
+  aitrack-server:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/aitrack
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATASOURCE_USERNAME=aitrack
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+
+volumes:
+  postgres-data:
+```
+
+运行：
+```bash
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --profile java up -d
+```
+
+### ParadeDB 模式（Phase DB-1）
+
+`docker/docker-compose.yml` 内置 `db` 服务（`paradedb/paradedb:latest`）。ParadeDB 是 PostgreSQL 兼容镜像，预装 `pg_search`（BM25 全文检索）和 `pgvector`（向量 ANN），无需手动安装扩展。
+
+**快速启动：**
 
 ```bash
-# 1. Start ParadeDB (healthcheck: pg_isready)
+# 1. 启动 ParadeDB（健康检查：pg_isready，通过后继续）
 docker compose up db -d
 
-# 2. Start Java server in postgres mode
+# 2. Java 服务端切换 postgres 模式
 docker run --rm \
   -e SPRING_PROFILES_ACTIVE=postgres \
   -e AITRACK_DB_HOST=host.docker.internal \
@@ -170,61 +208,143 @@ docker run --rm \
   -p 8080:8080 \
   aitrack-server-java:latest
 
-# 3. Start Go server in postgres mode
+# 3. Go 服务端切换 postgres 模式
 docker run --rm \
   -e DATABASE_URL=postgres://aitrack:aitrack_secret@host.docker.internal:5432/aitrack \
   -p 8081:8081 \
   aitrack-server-go:latest
 ```
 
-**One-time index creation** (run after first deploy, against the ParadeDB instance):
+**首次部署后一次性执行**（BM25 + HNSW 索引创建，供 Phase DB-3 使用）：
 
 ```sql
--- BM25 full-text index (Phase DB-3 search endpoint prerequisite)
 CREATE INDEX IF NOT EXISTS edits_bm25 ON edit_records
   USING bm25 (id, diff_hunk, prompt_summary) WITH (key_field = 'id');
 
--- HNSW vector index (activated when embeddings are backfilled in DB-3)
 CREATE INDEX IF NOT EXISTS edits_hnsw ON edit_records
   USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;
 ```
 
-Reference: `server-java/src/main/resources/db-postgres-init.sql`.
+参考：`server-java/src/main/resources/db-postgres-init.sql`。
 
-**New environment variables (Java postgres profile):**
+**新增环境变量（Java postgres profile）：**
 
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `SPRING_PROFILES_ACTIVE` | *(empty = H2)* | Set to `postgres` to enable PostgreSQL mode |
-| `AITRACK_DB_HOST` | `localhost` | PostgreSQL/ParadeDB host |
-| `AITRACK_DB_PORT` | `5432` | Port |
-| `AITRACK_DB_NAME` | `aitrack` | Database name |
-| `AITRACK_DB_USER` | `aitrack` | Username |
-| `AITRACK_DB_PASSWORD` | `aitrack_secret` | Password |
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `SPRING_PROFILES_ACTIVE` | *(空 = H2)* | 设为 `postgres` 启用 PostgreSQL 模式 |
+| `AITRACK_DB_HOST` | `localhost` | 数据库主机 |
+| `AITRACK_DB_PORT` | `5432` | 端口 |
+| `AITRACK_DB_NAME` | `aitrack` | 数据库名 |
+| `AITRACK_DB_USER` | `aitrack` | 用户名 |
+| `AITRACK_DB_PASSWORD` | `aitrack_secret` | 密码 |
 
-**New environment variables (Go server):**
+**新增环境变量（Go 服务端）：**
 
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `DATABASE_URL` | *(empty = SQLite)* | Full PostgreSQL DSN, e.g. `postgres://user:pass@host:5432/db` |
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `DATABASE_URL` | *(空 = SQLite)* | 完整 PostgreSQL DSN，如 `postgres://user:pass@host:5432/db` |
+
+---
+
+## 快速启动（H2，开发/评估环境）
+
+```bash
+# 1. 克隆仓库
+git clone <repo-url>
+cd company-aitrack
+
+# 2. 生成密钥
+export AITRACK_SECRET_KEY=$(openssl rand -base64 32)
+export AITRACK_ADMIN_KEY=$(openssl rand -hex 32)
+
+# 3. 构建并启动
+docker compose -f docker/docker-compose.yml --profile java up -d --build
+
+# 4. 验证服务
+curl http://localhost:8080/actuator/health
+
+# 5. 签发第一个 token
+curl -X POST http://localhost:8080/admin/tokens \
+  -H "X-Admin-Key: $AITRACK_ADMIN_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"owner":"alice","note":"macbook-dev"}'
+# → {"credential":"aitrack_...-<hmac_secret>","token_key":"..."}
+
+# 6. 开发者初始化客户端
+aitrack init --claude \
+  --api-url http://localhost:8080 \
+  --credential <credential>
+```
+
+---
+
+## 客户端构建与分发
+
+### 本地构建
+
+```bash
+cd client
+cargo build --release
+# 产物：client/target/release/aitrack
+```
+
+### 跨平台构建
+
+```bash
+# macOS aarch64（Apple Silicon）
+cargo build --release --target aarch64-apple-darwin
+
+# macOS x86_64
+cargo build --release --target x86_64-apple-darwin
+
+# Linux x86_64（服务器 CI 环境）
+cargo build --release --target x86_64-unknown-linux-gnu
+```
+
+### 安装位置
+
+将 `aitrack` 二进制分发给开发者，建议放在：
+- macOS / Linux：`/usr/local/bin/aitrack`
+
+开发者安装完成后执行：
+```bash
+aitrack init --claude --api-url https://aitrack.example.com \
+             --credential <credential>
+```
 
 ---
 
 ## 运维要点
 
-**Admin 接口安全**：生产环境中 `/admin/**` 应通过网络 ACL 或反向代理限制访问，不对公网暴露。
+### 日志查看
 
-**Credential 签发流程**：
+Spring Boot 默认日志到 stdout，通过 docker logs 查看：
+
+```bash
+docker logs aitrack-server --tail 100 -f
+```
+
+关键日志关键字：
+- `校验链失败` / `sig_mismatch` — 签名验证问题
+- `rate_limited` — 限流触发
+- `flagged` — 可疑记录被标记
+- `ERROR` / `WARN` — 需要关注的异常
+
+### Admin 接口安全
+
+生产环境中 `/admin/**` 应通过网络 ACL 或反向代理限制访问，不对公网暴露。
+
+### Token 签发流程
 
 ```bash
 curl -X POST http://localhost:8080/admin/tokens \
   -H 'X-Admin-Key: YOUR_ADMIN_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"owner":"alice","note":"dev machine"}'
-# 响应中的 credential 仅出现一次，立即保存并交给开发者
+# 响应中的 credential 仅出现一次，立即将其值交给对应开发者
 ```
 
-**检查设备心跳状态**：
+### 检查设备心跳状态
 
 ```bash
 curl http://localhost:8080/api/v1/ai-track/devices \
@@ -233,14 +353,88 @@ curl http://localhost:8080/api/v1/ai-track/devices \
 
 `hooks.claude/codex/cursor` 为 `false` 的设备需人工核查是否绕过了监控。
 
-**H2 控制台**（Java 实现，仅开发环境，生产环境强制禁用）：
+### 数据备份（H2）
 
-H2 Web 控制台在生产 Profile 下通过 `spring.h2.console.enabled=false` 强制禁用。仅在本地开发时可用：
+```bash
+# 停服备份
+docker compose -f docker/docker-compose.yml stop aitrack-server
+docker run --rm -v aitrack-java-data:/data -v $(pwd):/backup \
+  alpine tar czf /backup/aitrack-data-$(date +%Y%m%d).tar.gz /data
+docker compose -f docker/docker-compose.yml start aitrack-server
+```
+
+PostgreSQL 使用标准 `pg_dump`。
+
+### 升级流程
+
+```bash
+# 1. 拉取新镜像
+docker compose -f docker/docker-compose.yml pull
+
+# 2. 重启（H2 数据持久化在 volume，安全）
+docker compose -f docker/docker-compose.yml --profile java up -d
+
+# 3. 验证
+curl http://localhost:8080/actuator/health
+```
+
+### HTTPS 配置（生产必须）
+
+推荐在服务器前置 nginx/Caddy 做 TLS 终止：
+
+```nginx
+# /etc/nginx/conf.d/aitrack.conf
+server {
+    listen 443 ssl;
+    server_name aitrack.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/aitrack.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/aitrack.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+使用 Caddy（自动 HTTPS）：
+```
+aitrack.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+### H2 控制台（仅开发环境）
+
+H2 控制台在非 `dev` profile 下默认关闭（加固点 H5），生产部署无需额外配置。本地开发时访问：
 
 ```
 http://localhost:8080/h2-console
 JDBC URL: jdbc:h2:file:./data/aitrack
+User: sa
+Password:（空）
 ```
+
+**生产环境务必禁用**，在 `application.yml` 中设置：
+```yaml
+spring.h2.console.enabled: false
+```
+
+---
+
+## 资源规格建议
+
+| 规模 | 建议配置 | 存储（1 年） |
+|------|----------|-------------|
+| 小团队（1–10 人） | 1 vCPU / 512MB RAM | < 1GB（H2 足够） |
+| 中等团队（10–50 人） | 2 vCPU / 1GB RAM | 1–10GB（建议 PostgreSQL） |
+| 大型团队（50+ 人） | 4 vCPU / 2GB RAM + 独立 PG | 10–100GB |
+
+估算基准：每位开发者每天约 50–200 次编辑事件，每条记录约 2–5KB（含 diff_hunk）。
 
 ---
 
