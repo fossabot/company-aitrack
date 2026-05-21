@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# aitrack 🛡️
+# aitrack 企业级 AI 代码度量 🛡️
 
 > *「把 AI 编码行为纳入可信审计，还给研发效能团队一份真实数据。」*
 
