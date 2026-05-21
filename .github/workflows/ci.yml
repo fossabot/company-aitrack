@@ -82,9 +82,9 @@ jobs:
       paradedb:
         image: paradedb/paradedb:latest
         env:
-          POSTGRESQL_USERNAME: aitrack
-          POSTGRESQL_PASSWORD: aitrack_secret
-          POSTGRESQL_DATABASE: aitrack_test
+          POSTGRES_USER: aitrack
+          POSTGRES_PASSWORD: aitrack_secret
+          POSTGRES_DB: aitrack_test
         ports:
           - 5432:5432
         options: >-

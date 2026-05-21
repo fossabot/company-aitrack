@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,7 +21,25 @@ import (
 	"github.com/aitrack/server/internal/infrastructure/config"
 	dbpkg "github.com/aitrack/server/internal/infrastructure/db"
 	"github.com/aitrack/server/internal/testkit"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func testDBURL() string {
+	if u := os.Getenv("TEST_DATABASE_URL"); u != "" {
+		return u
+	}
+	return "postgres://aitrack:aitrack_secret@localhost:5432/aitrack_test?sslmode=disable"
+}
+
+func TestMain(m *testing.M) {
+	conn, err := sql.Open("pgx", testDBURL())
+	if err != nil || conn.Ping() != nil {
+		fmt.Println("SKIP: TEST_DATABASE_URL not reachable, skipping handler tests")
+		os.Exit(0)
+	}
+	conn.Close()
+	os.Exit(m.Run())
+}
 
 // testEnv holds a fully wired server for handler tests.
 type testEnv struct {
@@ -35,7 +54,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	database, err := dbpkg.Open(":memory:")
+	database, err := dbpkg.Open(testDBURL())
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
@@ -72,8 +91,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	editsH := handler.NewEditsHandler(auth, ingestSvc)
 	hbH := handler.NewHeartbeatHandler(auth, heartbeatSvc)
 	statsH := handler.NewStatsHandler(auth, statsSvc)
-	searchH := handler.NewSearchHandler(database, cfg.AdminKey, false /* SQLite in tests */)
-	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, false /* SQLite in tests */)
+	searchH := handler.NewSearchHandler(database, cfg.AdminKey, true /* PostgreSQL */)
+	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, true /* PostgreSQL */)
 	profileH := handler.NewProfileHandler(database, cfg.AdminKey)
 	router := handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH, profileH)
 

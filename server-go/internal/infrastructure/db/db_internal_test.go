@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -17,16 +16,6 @@ func testDSN() string {
 		return "postgres://aitrack:aitrack_secret@localhost:5432/aitrack_test?sslmode=disable"
 	}
 	return dsn
-}
-
-func TestMain(m *testing.M) {
-	conn, err := sql.Open("pgx", testDSN())
-	if err != nil || conn.Ping() != nil {
-		fmt.Println("SKIP: TEST_DATABASE_URL not reachable, skipping DB integration tests")
-		os.Exit(0) // skip but pass
-	}
-	conn.Close()
-	os.Exit(m.Run())
 }
 
 // TestMigrateOnClosedDB exercises the migrate function directly with a closed db.
