@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
           cache-dependency-path: server-go/go.sum
       - name: go vet
         run: cd server-go && go vet ./...
