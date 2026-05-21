@@ -440,6 +440,7 @@ mod tests {
     /// Async variant: sets AITRACK_HOME for the duration of an async block,
     /// holding the env lock while the block executes synchronously via
     /// `tokio::task::block_in_place`.
+    #[allow(clippy::await_holding_lock)]
     async fn with_home_async<F, Fut>(dir: &TempDir, f: F)
     where
         F: FnOnce() -> Fut,

@@ -28,7 +28,7 @@ pub const ED25519_PUBKEY_BASE64: &str =
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
-struct Release {
+pub(crate) struct Release {
     tag_name: String,
     assets: Vec<Asset>,
 }
@@ -46,11 +46,7 @@ struct Asset {
 /// Build the asset filename stem for the current platform.
 /// Format: `aitrack-{arch}-{os}` on Unix, `aitrack-{arch}-{os}.exe` on Windows.
 pub fn platform_target_string() -> String {
-    let arch = match std::env::consts::ARCH {
-        "aarch64" => "aarch64",
-        "x86_64" => "x86_64",
-        other => other,
-    };
+    let arch = std::env::consts::ARCH;
     let os = match std::env::consts::OS {
         "macos" => "apple-darwin",
         "linux" => "unknown-linux-musl",
@@ -169,7 +165,7 @@ fn replace_current_exe(new_bytes: &[u8]) -> Result<()> {
 
 /// Given a parsed `Release`, return `(binary_url, sig_url)` for `target`.
 /// Returns `Err` if either asset is absent.
-pub fn find_asset_urls<'a>(release: &'a Release, target: &str) -> Result<(&'a str, &'a str)> {
+pub(crate) fn find_asset_urls<'a>(release: &'a Release, target: &str) -> Result<(&'a str, &'a str)> {
     let bin_asset = release
         .assets
         .iter()
@@ -455,11 +451,7 @@ mod tests {
         let s = platform_target_string();
         let arch = std::env::consts::ARCH;
         // The arch should appear somewhere in the string.
-        let arch_mapped = match arch {
-            "aarch64" => "aarch64",
-            "x86_64" => "x86_64",
-            other => other,
-        };
+        let arch_mapped = arch;
         assert!(
             s.contains(arch_mapped),
             "platform string '{s}' should contain arch '{arch_mapped}'"

@@ -13,7 +13,9 @@ RUN go mod download
 COPY server-go/ ./
 
 # Run tests with coverage
-RUN go test ./... -coverprofile=cover.out -covermode=atomic -count=1
+RUN go test ./internal/... \
+    -coverprofile=cover.out -covermode=atomic -count=1 \
+    -coverpkg=./internal/...
 
 # Check coverage >= 90%
 RUN go tool cover -func=cover.out | \
