@@ -2,8 +2,12 @@ package application_test
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	dbadapter "github.com/aitrack/server/internal/adapter/db"
 	"github.com/aitrack/server/internal/application"
@@ -12,9 +16,26 @@ import (
 	dbpkg "github.com/aitrack/server/internal/infrastructure/db"
 )
 
+func testDBURL() string {
+	if u := os.Getenv("TEST_DATABASE_URL"); u != "" {
+		return u
+	}
+	return "postgres://aitrack:aitrack_secret@localhost:5432/aitrack_test?sslmode=disable"
+}
+
+func TestMain(m *testing.M) {
+	conn, err := sql.Open("pgx", testDBURL())
+	if err != nil || conn.Ping() != nil {
+		fmt.Println("SKIP: TEST_DATABASE_URL not reachable, skipping application tests")
+		os.Exit(0)
+	}
+	conn.Close()
+	os.Exit(m.Run())
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	database, err := dbpkg.Open(":memory:")
+	database, err := dbpkg.Open(testDBURL())
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
@@ -91,7 +112,7 @@ func TestTokenService_FindInactiveToken(t *testing.T) {
 	resp, _ := svc.CreateToken(&model.CreateTokenRequest{Owner: "bob"})
 
 	// Mark inactive
-	database.Exec("UPDATE tokens SET active = 0 WHERE token_key = ?", resp.TokenKey)
+	database.Exec("UPDATE tokens SET active = 0 WHERE token_key = $1", resp.TokenKey)
 
 	// Extract token part from credential (everything before first '-')
 	rawToken := strings.SplitN(resp.Credential, "-", 2)[0]

@@ -28,7 +28,7 @@ func (r *DeviceAdapter) Upsert(d *model.Device) error {
 	}
 	_, err := r.db.Exec(`
 		INSERT INTO devices (device_id, token_key, hostname, client_version, last_heartbeat, hooks_json, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT(device_id) DO UPDATE SET
 		  token_key      = excluded.token_key,
 		  hostname       = excluded.hostname,
@@ -45,7 +45,7 @@ func (r *DeviceAdapter) Upsert(d *model.Device) error {
 func (r *DeviceAdapter) FindByDeviceID(deviceID string) (*model.Device, error) {
 	row := r.db.QueryRow(`
 		SELECT id, device_id, token_key, hostname, client_version, last_heartbeat, hooks_json, created_at
-		FROM devices WHERE device_id = ?`, deviceID)
+		FROM devices WHERE device_id = $1`, deviceID)
 	var d model.Device
 	var lastHB, createdAt sql.NullString
 	err := row.Scan(&d.ID, &d.DeviceID, &d.TokenKey, &d.Hostname, &d.ClientVersion, &lastHB, &d.HooksJSON, &createdAt)

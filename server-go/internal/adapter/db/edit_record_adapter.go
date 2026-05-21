@@ -29,7 +29,7 @@ func (r *EditRecordAdapter) Save(rec *model.EditRecord) error {
 		  (token_key, device_id, hostname, tool, tool_version, provider, model, session_id,
 		   repo_url, branch, current_sha, file_path, added_lines, removed_lines,
 		   diff_hunk, metadata, timestamp, record_sig, status, flags, received_at, prompt_summary)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
 		rec.TokenKey, rec.DeviceID, rec.Hostname, rec.Tool, rec.ToolVersion, rec.Provider, rec.Model,
 		rec.SessionID, rec.RepoURL, rec.Branch, rec.CurrentSHA, rec.FilePath,
 		rec.AddedLines, rec.RemovedLines, rec.DiffHunk, rec.Metadata, rec.Timestamp,
@@ -45,7 +45,7 @@ func (r *EditRecordAdapter) CountByTokenKeyAndFilePathSince(tokenKey, filePath s
 	var count int64
 	err := r.db.QueryRow(
 		`SELECT COUNT(*) FROM edit_records
-		 WHERE token_key = ? AND file_path = ? AND received_at >= ?`,
+		 WHERE token_key = $1 AND file_path = $2 AND received_at >= $3`,
 		tokenKey, filePath, since.UTC().Format(time.RFC3339),
 	).Scan(&count)
 	return count, err
@@ -57,11 +57,11 @@ func (r *EditRecordAdapter) Query(tokenKey, repoURL string, page, size int) ([]m
 	var conditions []string
 
 	if tokenKey != "" {
-		conditions = append(conditions, "token_key = ?")
+		conditions = append(conditions, fmt.Sprintf("token_key = $%d", len(args)+1))
 		args = append(args, tokenKey)
 	}
 	if repoURL != "" {
-		conditions = append(conditions, "repo_url = ?")
+		conditions = append(conditions, fmt.Sprintf("repo_url = $%d", len(args)+1))
 		args = append(args, repoURL)
 	}
 
@@ -76,12 +76,14 @@ func (r *EditRecordAdapter) Query(tokenKey, repoURL string, page, size int) ([]m
 	}
 
 	offset := page * size
+	limitN := len(args) + 1
+	offsetN := len(args) + 2
 	queryArgs := append(args, size, offset)
 	rows, err := r.db.Query(
 		`SELECT id, token_key, device_id, hostname, tool, tool_version, provider, model, session_id,
 		        repo_url, branch, current_sha, file_path, added_lines, removed_lines,
 		        diff_hunk, metadata, timestamp, record_sig, status, flags, received_at, prompt_summary
-		 FROM edit_records `+where+` ORDER BY received_at DESC LIMIT ? OFFSET ?`,
+		 FROM edit_records `+where+fmt.Sprintf(` ORDER BY received_at DESC LIMIT $%d OFFSET $%d`, limitN, offsetN),
 		queryArgs...,
 	)
 	if err != nil {

@@ -63,7 +63,7 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 	// Look up owner from tokens table.
 	var owner string
 	err := h.db.QueryRowContext(ctx,
-		`SELECT owner FROM tokens WHERE token_key = ? AND active = 1`, tokenKey,
+		`SELECT owner FROM tokens WHERE token_key = $1 AND active = 1`, tokenKey,
 	).Scan(&owner)
 	if err == sql.ErrNoRows {
 		return nil, nil // token not found → 404
@@ -76,7 +76,7 @@ func (h *ProfileHandler) computeProfile(r *http.Request, tokenKey string) (*mode
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT tool, file_path, added_lines, removed_lines, diff_hunk, timestamp, status, prompt_summary
 		 FROM edit_records
-		 WHERE token_key = ? AND status != 'REJECTED'`,
+		 WHERE token_key = $1 AND status != 'REJECTED'`,
 		tokenKey,
 	)
 	if err != nil {

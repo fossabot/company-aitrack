@@ -27,7 +27,7 @@ var _ port.TokenPort = (*TokenAdapter)(nil)
 func (r *TokenAdapter) Save(t *model.Token) error {
 	_, err := r.db.Exec(
 		`INSERT INTO tokens (token_hash, token_key, hmac_secret, owner, note, active, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		t.TokenHash, t.TokenKey, t.HmacSecret, t.Owner, t.Note,
 		boolToInt(t.Active), t.CreatedAt.UTC().Format(time.RFC3339),
 	)
@@ -38,7 +38,7 @@ func (r *TokenAdapter) Save(t *model.Token) error {
 func (r *TokenAdapter) FindActiveByHash(hash string) (*model.Token, error) {
 	row := r.db.QueryRow(
 		`SELECT id, token_hash, token_key, hmac_secret, owner, note, active, created_at
-		 FROM tokens WHERE token_hash = ? AND active = 1`, hash)
+		 FROM tokens WHERE token_hash = $1 AND active = 1`, hash)
 	return scanToken(row)
 }
 
