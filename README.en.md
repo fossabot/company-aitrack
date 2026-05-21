@@ -208,7 +208,7 @@ bash e2e/run.sh both
 | **Token hash storage** | Server stores only `sha256(token)` — plaintext returned only once at issuance |
 | **Local-first** | All data stored on self-hosted infrastructure, never passes through any third-party cloud service |
 | **Constant-time comparison** | HMAC verification uses constant-time comparison to prevent timing attacks |
-| **Minimal collection** | Collects file paths, change diffs (unified diff format, changed lines only — not full file content), line counts, and repo metadata; does not collect prompt content, conversation history, or keyboard input |
+| **Minimal collection** | Collects file paths, change diffs (unified diff format, changed lines only), line counts, repo metadata, and an optional prompt summary (for tool-use classification); does not collect full conversation history or keyboard input |
 
 ---
 
