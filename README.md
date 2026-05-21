@@ -237,13 +237,9 @@ bash e2e/run.sh both
 
 ## 致谢
 
-感谢以下开源项目为本项目提供了坚实的技术基础：
+[![LINUXDO](https://img.shields.io/badge/%E7%A4%BE%E5%8C%BA-LINUXDO-0086c9?style=for-the-badge&labelColor=555555)](https://linux.do)
 
-[go-chi/chi](https://github.com/go-chi/chi) — Go 服务端所用的轻量级路由框架，简洁高效。
-
-[spring-projects/spring-boot](https://github.com/spring-projects/spring-boot) — Java 服务端核心框架，提供生产级基础设施。
-
-感谢 **`Rust`** 社区提供的优秀工具链，使客户端得以以单二进制、零运行时依赖的形式交付。
+感谢 **`linux.do`** 社区的讨论、分享与支持。这个项目在工程实践、设计思路和持续迭代上，都受益于社区氛围与成员交流。
 
 ---
 
