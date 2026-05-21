@@ -235,4 +235,16 @@ bash e2e/run.sh both
 
 ---
 
+## 致谢
+
+感谢以下开源项目为本项目提供了坚实的技术基础：
+
+[go-chi/chi](https://github.com/go-chi/chi) — Go 服务端所用的轻量级路由框架，简洁高效。
+
+[spring-projects/spring-boot](https://github.com/spring-projects/spring-boot) — Java 服务端核心框架，提供生产级基础设施。
+
+感谢 **`Rust`** 社区提供的优秀工具链，使客户端得以以单二进制、零运行时依赖的形式交付。
+
+---
+
 [MIT License](LICENSE) © 2026 MapleEve

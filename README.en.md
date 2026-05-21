@@ -235,4 +235,16 @@ bash e2e/run.sh both
 
 ---
 
+## Acknowledgements
+
+Thanks to the following open-source projects for their foundational contributions:
+
+[go-chi/chi](https://github.com/go-chi/chi) — lightweight and idiomatic Go HTTP router powering the Go server.
+
+[spring-projects/spring-boot](https://github.com/spring-projects/spring-boot) — production-grade Java framework underpinning the Java server.
+
+Thanks to the **`Rust`** community for an excellent toolchain that ships the client as a single binary with zero runtime dependencies.
+
+---
+
 [MIT License](LICENSE) © 2026 MapleEve
