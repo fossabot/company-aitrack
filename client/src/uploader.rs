@@ -72,14 +72,14 @@ pub async fn flush_unsynced(conn: &Connection, uploader: &HttpUploader) -> Resul
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
-    use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use crate::adapter::sqlite::{self as db, ensure_kv_table, fetch_unsynced, pending_count};
+    use super::flush_unsynced;
     use crate::adapter::http::upload::HttpUploader;
+    use crate::adapter::sqlite::{self as db, ensure_kv_table, fetch_unsynced, pending_count};
     use crate::config::mask_token;
     use crate::testkit::factories::EditRecordFactory;
-    use super::flush_unsynced;
 
     const CREATE_TABLE_SQL: &str = "
     CREATE TABLE IF NOT EXISTS records (
@@ -114,13 +114,16 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(CREATE_TABLE_SQL).unwrap();
         let _ = conn.execute(
-            "ALTER TABLE records ADD COLUMN device_id TEXT NOT NULL DEFAULT ''", [],
+            "ALTER TABLE records ADD COLUMN device_id TEXT NOT NULL DEFAULT ''",
+            [],
         );
         let _ = conn.execute(
-            "ALTER TABLE records ADD COLUMN hostname TEXT NOT NULL DEFAULT ''", [],
+            "ALTER TABLE records ADD COLUMN hostname TEXT NOT NULL DEFAULT ''",
+            [],
         );
         let _ = conn.execute(
-            "ALTER TABLE records ADD COLUMN record_sig TEXT NOT NULL DEFAULT ''", [],
+            "ALTER TABLE records ADD COLUMN record_sig TEXT NOT NULL DEFAULT ''",
+            [],
         );
         ensure_kv_table(&conn).unwrap();
         conn
@@ -138,7 +141,10 @@ mod tests {
             .build();
         db::insert_record(conn, &rec).unwrap();
         // Get the inserted id
-        conn.query_row("SELECT id FROM records ORDER BY id DESC LIMIT 1", [], |r| r.get(0)).unwrap()
+        conn.query_row("SELECT id FROM records ORDER BY id DESC LIMIT 1", [], |r| {
+            r.get(0)
+        })
+        .unwrap()
     }
 
     fn make_uploader(api_url: &str) -> HttpUploader {
@@ -158,12 +164,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "accepted": 1,
-                    "rejected": [],
-                    "flagged": []
-                })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 1,
+                "rejected": [],
+                "flagged": []
+            })))
             .mount(&mock_server)
             .await;
 
@@ -184,12 +189,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "accepted": 0,
-                    "rejected": [{"index": 0, "reason": "invalid_sig"}],
-                    "flagged": []
-                })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 0,
+                "rejected": [{"index": 0, "reason": "invalid_sig"}],
+                "flagged": []
+            })))
             .mount(&mock_server)
             .await;
 
@@ -212,12 +216,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "accepted": 0,
-                    "rejected": [],
-                    "flagged": [{"index": 0, "reason": "duplicate"}]
-                })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 0,
+                "rejected": [],
+                "flagged": [{"index": 0, "reason": "duplicate"}]
+            })))
             .mount(&mock_server)
             .await;
 
@@ -263,7 +266,10 @@ mod tests {
         flush_unsynced(&conn, &uploader).await.unwrap();
 
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
-        assert_eq!(rows[0].retry_count, 1, "connection error → retry incremented");
+        assert_eq!(
+            rows[0].retry_count, 1,
+            "connection error → retry incremented"
+        );
     }
 
     #[tokio::test]
@@ -271,12 +277,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "accepted": 1,
-                    "rejected": [{"index": 1, "reason": "invalid_sig"}],
-                    "flagged": []
-                })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 1,
+                "rejected": [{"index": 1, "reason": "invalid_sig"}],
+                "flagged": []
+            })))
             .mount(&mock_server)
             .await;
 
@@ -313,7 +318,10 @@ mod tests {
 
         // Fallback: mark_synced all ids
         let rows = fetch_unsynced(&conn, &masked, 10).unwrap();
-        assert!(rows.iter().all(|r| r.id != id), "unparseable 200 → fallback synced");
+        assert!(
+            rows.iter().all(|r| r.id != id),
+            "unparseable 200 → fallback synced"
+        );
     }
 
     #[test]
@@ -358,8 +366,8 @@ mod tests {
 
     #[test]
     fn tampered_record_sig_is_not_valid_hmac() {
-        use crate::testkit::factories::tampered_record_sig;
         use crate::domain::crypto::compute_record_sig;
+        use crate::testkit::factories::tampered_record_sig;
         let rec = tampered_record_sig(42);
         let real_sig = compute_record_sig(
             "some-secret",
@@ -375,7 +383,10 @@ mod tests {
             rec.removed_lines,
             rec.diff_hunk.as_deref(),
         );
-        assert_ne!(rec.record_sig, real_sig, "tampered sig must differ from real sig");
+        assert_ne!(
+            rec.record_sig, real_sig,
+            "tampered sig must differ from real sig"
+        );
     }
 
     /// Capture chain integration test: parse → diff → sig → db insert → upload → mark synced.
@@ -388,8 +399,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"accepted": 1, "rejected": [], "flagged": []})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(
+                    serde_json::json!({"accepted": 1, "rejected": [], "flagged": []}),
+                ),
+            )
             .mount(&mock_server)
             .await;
 
@@ -428,7 +442,11 @@ mod tests {
             record.removed_lines,
             record.diff_hunk.as_deref(),
         );
-        assert_eq!(record.record_sig.len(), 64, "record_sig must be 64-char hex");
+        assert_eq!(
+            record.record_sig.len(),
+            64,
+            "record_sig must be 64-char hex"
+        );
 
         // 4. DB insert
         let conn = open_test_db();
@@ -445,7 +463,11 @@ mod tests {
         // 7. Upload and verify synced
         let uploader = make_uploader(&mock_server.uri());
         flush_unsynced(&conn, &uploader).await.unwrap();
-        assert_eq!(pending_count(&conn, &token_key), 0, "after accepted upload: synced");
+        assert_eq!(
+            pending_count(&conn, &token_key),
+            0,
+            "after accepted upload: synced"
+        );
 
         // old has 1 line ("fn old()"), new has 2 lines ("fn new()" + "fn added()")
         // Myers: delete "fn old()", insert "fn new()" + "fn added()"

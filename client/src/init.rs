@@ -5,14 +5,12 @@ use std::path::Path;
 
 const COMMENT_MARKER: &str = "# aitrack";
 
-pub fn install_hooks(
-    tools: &[&str],
-    aitrack_bin: &str,
-    home: &Path,
-) -> Result<()> {
+pub fn install_hooks(tools: &[&str], aitrack_bin: &str, home: &Path) -> Result<()> {
     for tool in tools {
         match *tool {
-            "claude" => install_claude_hook(&home.join(".claude").join("settings.json"), aitrack_bin)?,
+            "claude" => {
+                install_claude_hook(&home.join(".claude").join("settings.json"), aitrack_bin)?
+            }
             "codex" => install_codex_hook(&home.join(".codex").join("config.toml"), aitrack_bin)?,
             "cursor" => install_cursor_hook(&home.join(".cursor").join("hooks.json"), aitrack_bin)?,
             _ => {}
@@ -475,7 +473,10 @@ mod tests {
         let text = std::fs::read_to_string(&path).unwrap();
         let val: serde_json::Value = serde_json::from_str(&text).unwrap();
         // PostToolUse key should be removed when empty
-        assert!(val["hooks"]["PostToolUse"].is_null(), "empty PostToolUse should be removed");
+        assert!(
+            val["hooks"]["PostToolUse"].is_null(),
+            "empty PostToolUse should be removed"
+        );
     }
 
     #[test]
@@ -495,7 +496,11 @@ mod tests {
         install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         let val: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(val["other_key"], serde_json::Value::Bool(true), "existing keys preserved");
+        assert_eq!(
+            val["other_key"],
+            serde_json::Value::Bool(true),
+            "existing keys preserved"
+        );
         assert!(has_claude_hook(&path));
     }
 
@@ -516,13 +521,19 @@ mod tests {
         let home = setup_home();
         let path = home.path().join(".claude").join("settings.json");
         install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
-        assert!(has_claude_prompt_hook(&path), "prompt hook should be installed");
+        assert!(
+            has_claude_prompt_hook(&path),
+            "prompt hook should be installed"
+        );
         let text = std::fs::read_to_string(&path).unwrap();
         let val: serde_json::Value = serde_json::from_str(&text).unwrap();
         let arr = val["hooks"]["UserPromptSubmit"].as_array().unwrap();
         assert_eq!(arr.len(), 1, "exactly 1 UserPromptSubmit entry");
         let cmd = arr[0]["hooks"][0]["command"].as_str().unwrap();
-        assert!(cmd.contains("prompt-capture"), "command should contain prompt-capture");
+        assert!(
+            cmd.contains("prompt-capture"),
+            "command should contain prompt-capture"
+        );
     }
 
     #[test]
@@ -544,10 +555,16 @@ mod tests {
         install_claude_hook(&path, "/usr/local/bin/aitrack").unwrap();
         assert!(has_claude_prompt_hook(&path));
         remove_claude_hook(&path).unwrap();
-        assert!(!has_claude_prompt_hook(&path), "prompt hook should be removed");
+        assert!(
+            !has_claude_prompt_hook(&path),
+            "prompt hook should be removed"
+        );
         let text = std::fs::read_to_string(&path).unwrap();
         let val: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert!(val["hooks"]["UserPromptSubmit"].is_null(), "empty UserPromptSubmit should be removed");
+        assert!(
+            val["hooks"]["UserPromptSubmit"].is_null(),
+            "empty UserPromptSubmit should be removed"
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -601,7 +618,10 @@ mod tests {
         std::fs::write(&path, "[settings]\nsome_key = true\n").unwrap();
         install_codex_hook(&path, "/usr/local/bin/aitrack").unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("some_key = true"), "existing config preserved");
+        assert!(
+            text.contains("some_key = true"),
+            "existing config preserved"
+        );
         assert!(has_codex_hook(&path));
     }
 
@@ -712,7 +732,12 @@ mod tests {
     #[test]
     fn remove_hooks_multiple_tools() {
         let home = setup_home();
-        install_hooks(&["claude", "codex", "cursor"], "/usr/local/bin/aitrack", home.path()).unwrap();
+        install_hooks(
+            &["claude", "codex", "cursor"],
+            "/usr/local/bin/aitrack",
+            home.path(),
+        )
+        .unwrap();
         remove_hooks(&["claude", "codex", "cursor"], home.path()).unwrap();
         let (claude, codex, cursor) = detect_tool_statuses(home.path());
         assert!(!claude);

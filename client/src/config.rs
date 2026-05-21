@@ -61,7 +61,8 @@ pub fn save_config(cfg: &Config) -> Result<()> {
             .mode(0o600)
             .open(&tmp_path)
             .context("create config.toml.tmp")?;
-        f.write_all(text.as_bytes()).context("write config.toml.tmp")?;
+        f.write_all(text.as_bytes())
+            .context("write config.toml.tmp")?;
         f.flush().context("flush config.toml.tmp")?;
     }
     fs::rename(&tmp_path, &path).context("rename config.toml.tmp -> config.toml")?;
@@ -117,10 +118,7 @@ pub fn resolve_api_config(
 }
 
 /// Apply CLI-provided init args into config and persist.
-pub fn apply_init_args(
-    api_url: Option<String>,
-    credential: Option<String>,
-) -> Result<Config> {
+pub fn apply_init_args(api_url: Option<String>, credential: Option<String>) -> Result<Config> {
     let mut cfg = load_config();
 
     if let Some(u) = api_url {
@@ -213,7 +211,10 @@ mod tests {
         let result = split_credential("nodashhere");
         assert!(result.is_err(), "credential without '-' must return error");
         let msg = format!("{}", result.unwrap_err());
-        assert!(msg.contains("malformed credential"), "error message should mention 'malformed credential', got: {msg}");
+        assert!(
+            msg.contains("malformed credential"),
+            "error message should mention 'malformed credential', got: {msg}"
+        );
     }
 
     #[test]
@@ -254,7 +255,10 @@ mod tests {
         // "aitrack_" stripped → body length > 10 → truncated
         let token = "aitrack_abcdefghijklmnop";
         let masked = mask_token(token);
-        assert!(masked.contains('\u{2026}'), "expected ellipsis in: {masked}");
+        assert!(
+            masked.contains('\u{2026}'),
+            "expected ellipsis in: {masked}"
+        );
         // body after stripping: "abcdefghijklmnop" → head 6 = "abcdef" + … + tail 4 = "mnop"
         assert!(masked.starts_with("abcdef"), "got: {masked}");
         assert!(masked.ends_with("mnop"), "got: {masked}");
@@ -282,7 +286,10 @@ mod tests {
         // 11 chars after stripping prefix → HEAD(6) + … + TAIL(4) = truncated
         let token = "aitrack_12345678901";
         let masked = mask_token(token);
-        assert!(masked.contains('\u{2026}'), "expected ellipsis, got: {masked}");
+        assert!(
+            masked.contains('\u{2026}'),
+            "expected ellipsis, got: {masked}"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -473,8 +480,12 @@ mod tests {
         let api_url = Some("new-url".to_string());
         let new_credential: Option<String> = None;
 
-        if let Some(u) = api_url { cfg.api_url = u; }
-        if let Some(c) = new_credential { cfg.credential = c; }
+        if let Some(u) = api_url {
+            cfg.api_url = u;
+        }
+        if let Some(c) = new_credential {
+            cfg.credential = c;
+        }
 
         assert_eq!(cfg.api_url, "new-url");
         assert_eq!(cfg.credential, "aitrack_oldtoken-oldsecret"); // unchanged
@@ -562,7 +573,10 @@ mod tests {
 
             // File should now exist with the device_id
             let loaded = load_config();
-            assert_eq!(loaded.device_id, cfg.device_id, "device_id should be persisted");
+            assert_eq!(
+                loaded.device_id, cfg.device_id,
+                "device_id should be persisted"
+            );
         });
     }
 
@@ -589,11 +603,15 @@ mod tests {
             let result = apply_init_args(
                 Some("https://apply.example.com".to_string()),
                 Some("aitrack_applytoken12345-applyhmacsecret".to_string()),
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(result.api_url, "https://apply.example.com");
             assert_eq!(result.credential, "aitrack_applytoken12345-applyhmacsecret");
-            assert!(!result.device_id.is_empty(), "device_id should be auto-generated");
+            assert!(
+                !result.device_id.is_empty(),
+                "device_id should be auto-generated"
+            );
 
             // Load from disk and verify persistence
             let loaded = load_config();
@@ -636,7 +654,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         with_aitrack_home(&dir, |home| {
             let dir_path = config_dir();
-            assert_eq!(dir_path, home, "config_dir() should return AITRACK_HOME value");
+            assert_eq!(
+                dir_path, home,
+                "config_dir() should return AITRACK_HOME value"
+            );
 
             let cfg_path = config_path();
             assert_eq!(cfg_path, home.join("config.toml"));

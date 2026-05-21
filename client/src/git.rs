@@ -43,9 +43,18 @@ mod tests {
     fn infer_repo_info_non_git_dir_returns_default() {
         let dir = TempDir::new().unwrap();
         let info = infer_repo_info(dir.path());
-        assert!(info.repo_url.is_empty(), "non-git dir: repo_url should be empty");
-        assert!(info.branch.is_empty(), "non-git dir: branch should be empty");
-        assert!(info.current_sha.is_empty(), "non-git dir: sha should be empty");
+        assert!(
+            info.repo_url.is_empty(),
+            "non-git dir: repo_url should be empty"
+        );
+        assert!(
+            info.branch.is_empty(),
+            "non-git dir: branch should be empty"
+        );
+        assert!(
+            info.current_sha.is_empty(),
+            "non-git dir: sha should be empty"
+        );
     }
 
     #[test]
@@ -73,17 +82,27 @@ mod tests {
         if init.map(|o| o.status.success()).unwrap_or(false) {
             let _ = std::process::Command::new("git")
                 .args(["remote", "add", "origin", "git@github.com:test/repo.git"])
-                .current_dir(dir.path()).output();
+                .current_dir(dir.path())
+                .output();
             let _ = std::process::Command::new("git")
-                .args(["config", "user.email", "t@t.com"]).current_dir(dir.path()).output();
+                .args(["config", "user.email", "t@t.com"])
+                .current_dir(dir.path())
+                .output();
             let _ = std::process::Command::new("git")
-                .args(["config", "user.name", "T"]).current_dir(dir.path()).output();
+                .args(["config", "user.name", "T"])
+                .current_dir(dir.path())
+                .output();
             std::fs::write(dir.path().join("f"), "x").unwrap();
             let _ = std::process::Command::new("git")
-                .args(["add", "."]).current_dir(dir.path()).output();
+                .args(["add", "."])
+                .current_dir(dir.path())
+                .output();
             let committed = std::process::Command::new("git")
-                .args(["commit", "-m", "init"]).current_dir(dir.path()).output()
-                .map(|o| o.status.success()).unwrap_or(false);
+                .args(["commit", "-m", "init"])
+                .current_dir(dir.path())
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
             if committed {
                 let info = infer_repo_info(dir.path());
                 assert_eq!(info.repo_url, "git@github.com:test/repo.git");

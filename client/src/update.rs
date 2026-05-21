@@ -20,8 +20,7 @@ pub const GITHUB_RELEASES_API: &str =
 /// ed25519 public key used to verify release binary signatures.
 /// Corresponds to the RELEASE_SIGNING_KEY secret in the GitHub repository.
 /// Generated 2026-05-21; do not rotate — see CONTRIBUTING.md § 签名密钥管理.
-pub const ED25519_PUBKEY_BASE64: &str =
-    "u52DS9INW/U2cjc0DeJnKz/8Z9Fg0mnhf1DD21ZWDkY=";
+pub const ED25519_PUBKEY_BASE64: &str = "u52DS9INW/U2cjc0DeJnKz/8Z9Fg0mnhf1DD21ZWDkY=";
 
 // ---------------------------------------------------------------------------
 // GitHub Releases API response types
@@ -165,7 +164,10 @@ fn replace_current_exe(new_bytes: &[u8]) -> Result<()> {
 
 /// Given a parsed `Release`, return `(binary_url, sig_url)` for `target`.
 /// Returns `Err` if either asset is absent.
-pub(crate) fn find_asset_urls<'a>(release: &'a Release, target: &str) -> Result<(&'a str, &'a str)> {
+pub(crate) fn find_asset_urls<'a>(
+    release: &'a Release,
+    target: &str,
+) -> Result<(&'a str, &'a str)> {
     let bin_asset = release
         .assets
         .iter()
@@ -194,8 +196,8 @@ pub fn run_update() -> Result<()> {
     println!("Checking for updates (platform: {target})...");
 
     // Fetch latest release metadata.
-    let release_json = http_get_text(GITHUB_RELEASES_API)
-        .context("failed to reach GitHub Releases API")?;
+    let release_json =
+        http_get_text(GITHUB_RELEASES_API).context("failed to reach GitHub Releases API")?;
     let release: Release =
         serde_json::from_str(&release_json).context("failed to parse GitHub release JSON")?;
 
@@ -241,8 +243,14 @@ mod tests {
     #[test]
     fn test_platform_target_string() {
         let s = platform_target_string();
-        assert!(!s.is_empty(), "platform_target_string() returned empty string");
-        assert!(s.starts_with("aitrack-"), "expected 'aitrack-' prefix, got: {s}");
+        assert!(
+            !s.is_empty(),
+            "platform_target_string() returned empty string"
+        );
+        assert!(
+            s.starts_with("aitrack-"),
+            "expected 'aitrack-' prefix, got: {s}"
+        );
     }
 
     /// A tampered (all-zeros) signature must be rejected even against a valid keypair.
@@ -283,7 +291,10 @@ mod tests {
         let sig_b64 = B64.encode(signature.to_bytes());
 
         let result = verify_signature(&pubkey_b64, message, &sig_b64);
-        assert!(result.is_ok(), "expected valid signature to be accepted: {result:?}");
+        assert!(
+            result.is_ok(),
+            "expected valid signature to be accepted: {result:?}"
+        );
     }
 
     /// A signature valid for one message must be rejected for a different message.
@@ -335,7 +346,11 @@ mod tests {
     fn test_default_pubkey_constant_is_valid() {
         // The shipped public key must not be the all-zero placeholder.
         let result = load_verifying_key(ED25519_PUBKEY_BASE64);
-        assert!(result.is_ok(), "ED25519_PUBKEY_BASE64 must be a valid key: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "ED25519_PUBKEY_BASE64 must be a valid key: {:?}",
+            result.err()
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -443,7 +458,10 @@ mod tests {
     #[test]
     fn test_platform_target_no_spaces() {
         let s = platform_target_string();
-        assert!(!s.contains(' '), "platform string must not contain spaces: {s}");
+        assert!(
+            !s.contains(' '),
+            "platform string must not contain spaces: {s}"
+        );
     }
 
     #[test]

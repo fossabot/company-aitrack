@@ -109,11 +109,9 @@ pub fn pending_count(conn: &Connection, token_key: &str) -> i64 {
 }
 
 pub fn pending_count_all(conn: &Connection) -> i64 {
-    conn.query_row(
-        "SELECT COUNT(*) FROM records WHERE synced = 0",
-        [],
-        |row| row.get(0),
-    )
+    conn.query_row("SELECT COUNT(*) FROM records WHERE synced = 0", [], |row| {
+        row.get(0)
+    })
     .unwrap_or(0)
 }
 
@@ -127,9 +125,9 @@ pub fn inspect_records(
                 synced, retry_count, token_key, timestamp FROM records";
 
     let sql = match (pending_only, !token_key.is_empty()) {
-        (true, true) => format!(
-            "{base} WHERE synced = 0 AND token_key = ?1 ORDER BY id DESC LIMIT ?2"
-        ),
+        (true, true) => {
+            format!("{base} WHERE synced = 0 AND token_key = ?1 ORDER BY id DESC LIMIT ?2")
+        }
         (true, false) => format!("{base} WHERE synced = 0 ORDER BY id DESC LIMIT ?1"),
         (false, true) => format!("{base} WHERE token_key = ?1 ORDER BY id DESC LIMIT ?2"),
         (false, false) => format!("{base} ORDER BY id DESC LIMIT ?1"),

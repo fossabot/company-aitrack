@@ -1,6 +1,6 @@
-use serde::Deserialize;
-use crate::domain::model::Record;
 use crate::domain::diff::compute_diff;
+use crate::domain::model::Record;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct CursorToolInput {
@@ -43,7 +43,11 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         file_path,
         added_lines: diff.added,
         removed_lines: diff.removed,
-        diff_hunk: if diff.hunk.is_empty() { None } else { Some(diff.hunk) },
+        diff_hunk: if diff.hunk.is_empty() {
+            None
+        } else {
+            Some(diff.hunk)
+        },
         metadata: None,
         synced: 0,
         synced_at: None,
@@ -60,7 +64,7 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::testkit::factories::{CursorHookPayloadFactory, malformed_json};
+    use crate::testkit::factories::{malformed_json, CursorHookPayloadFactory};
 
     #[test]
     fn parse_valid_payload_old_new_str() {
@@ -89,7 +93,8 @@ mod tests {
                 "file_path": "src/content.rs",
                 "content": "brand new file content\n"
             }
-        }).to_string();
+        })
+        .to_string();
         let rec = parse(&json).expect("should parse using content field");
         assert_eq!(rec.file_path, "src/content.rs");
         // old_str is empty, new_text = content
@@ -101,8 +106,12 @@ mod tests {
         let json = serde_json::json!({
             "session_id": "sess-no-input",
             "cursor_version": "0.40.0"
-        }).to_string();
-        assert!(parse(&json).is_none(), "missing tool_input must return None");
+        })
+        .to_string();
+        assert!(
+            parse(&json).is_none(),
+            "missing tool_input must return None"
+        );
     }
 
     #[test]

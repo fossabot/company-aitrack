@@ -1,6 +1,6 @@
-use serde::Deserialize;
-use crate::domain::model::Record;
 use crate::domain::diff::compute_diff;
+use crate::domain::model::Record;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct ClaudeToolInput {
@@ -25,18 +25,15 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         .map_err(|e| eprintln!("[aitrack] claude adapter parse error: {e}"))
         .ok()?;
 
-    let input = payload
-        .tool_input
-        .or(payload.input)
-        .or_else(|| {
-            // Try to parse the tool_input field from the top-level
-            serde_json::from_str::<serde_json::Value>(stdin_json)
-                .ok()
-                .and_then(|v| {
-                    v.get("tool_input")
-                        .and_then(|ti| serde_json::from_value::<ClaudeToolInput>(ti.clone()).ok())
-                })
-        })?;
+    let input = payload.tool_input.or(payload.input).or_else(|| {
+        // Try to parse the tool_input field from the top-level
+        serde_json::from_str::<serde_json::Value>(stdin_json)
+            .ok()
+            .and_then(|v| {
+                v.get("tool_input")
+                    .and_then(|ti| serde_json::from_value::<ClaudeToolInput>(ti.clone()).ok())
+            })
+    })?;
 
     let old_string = input.old_string.unwrap_or_default();
     let new_string = input.new_string.unwrap_or_default();
@@ -52,7 +49,9 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         _ => "anthropic".to_string(),
     };
 
-    let model = payload.model.or_else(|| std::env::var("ANTHROPIC_MODEL").ok());
+    let model = payload
+        .model
+        .or_else(|| std::env::var("ANTHROPIC_MODEL").ok());
 
     Some(Record {
         id: 0,
@@ -71,7 +70,11 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         file_path,
         added_lines: diff.added,
         removed_lines: diff.removed,
-        diff_hunk: if diff.hunk.is_empty() { None } else { Some(diff.hunk) },
+        diff_hunk: if diff.hunk.is_empty() {
+            None
+        } else {
+            Some(diff.hunk)
+        },
         metadata: None,
         synced: 0,
         synced_at: None,
@@ -89,7 +92,7 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
 mod tests {
     use super::parse;
     use crate::testkit::factories::{
-        ClaudeHookPayloadFactory, malformed_json, json_missing_tool_input,
+        json_missing_tool_input, malformed_json, ClaudeHookPayloadFactory,
     };
 
     #[test]
@@ -152,7 +155,8 @@ mod tests {
                 "new_string": "new\n",
                 "file_paths": ["src/fallback.rs"]
             }
-        }).to_string();
+        })
+        .to_string();
         let rec = parse(&json).expect("should parse via 'input' fallback");
         assert_eq!(rec.file_path, "src/fallback.rs");
     }
@@ -164,7 +168,10 @@ mod tests {
             .with_new_string("line1\nline2\n")
             .build_json();
         let rec = parse(&json).expect("should parse");
-        assert!(rec.diff_hunk.is_some(), "hunk should be present when changes exist");
+        assert!(
+            rec.diff_hunk.is_some(),
+            "hunk should be present when changes exist"
+        );
         let hunk = rec.diff_hunk.unwrap();
         assert!(hunk.contains("@@"));
     }

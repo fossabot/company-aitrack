@@ -49,7 +49,7 @@ pub fn compute_request_sig(hmac_secret: &str, unix_ts: u64, body_bytes: &[u8]) -
 mod tests {
     use super::*;
     use crate::config::split_credential;
-use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
+    use crate::testkit::factories::{ApiConfigFactory, EditRecordFactory};
 
     // Known-value: sha256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb924\
@@ -90,9 +90,14 @@ use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
         let result = hmac_sha256_hex(b"secret", b"hello");
         assert_eq!(result.len(), 64);
         // Must be lowercase hex
-        assert!(result.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()));
+        assert!(result
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()));
         // Known value: 88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b
-        assert_eq!(result, "88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b");
+        assert_eq!(
+            result,
+            "88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b"
+        );
     }
 
     #[test]
@@ -149,9 +154,18 @@ use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
     fn compute_record_sig_with_diff_hunk() {
         let hunk = "@@ -1,2 +1,3 @@\n-old\n+new\n+extra";
         let sig = compute_record_sig(
-            "secret", "tok", "dev", "build-host", "2026-01-01T00:00:00Z",
-            "codex", "src/lib.rs", "https://github.com/x/y", "abc123",
-            3, 1, Some(hunk),
+            "secret",
+            "tok",
+            "dev",
+            "build-host",
+            "2026-01-01T00:00:00Z",
+            "codex",
+            "src/lib.rs",
+            "https://github.com/x/y",
+            "abc123",
+            3,
+            1,
+            Some(hunk),
         );
         let diff_hash = sha256_hex(hunk.as_bytes());
         let msg = format!(
@@ -218,13 +232,33 @@ use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
     #[test]
     fn compute_record_sig_tampered_field_changes_sig() {
         let base_sig = compute_record_sig(
-            "s", "tok", "dev", "host", "2026-01-01T00:00:00Z",
-            "claude", "src/a.rs", "url", "sha", 1, 0, None,
+            "s",
+            "tok",
+            "dev",
+            "host",
+            "2026-01-01T00:00:00Z",
+            "claude",
+            "src/a.rs",
+            "url",
+            "sha",
+            1,
+            0,
+            None,
         );
         // Change added_lines → sig must differ
         let tampered_sig = compute_record_sig(
-            "s", "tok", "dev", "host", "2026-01-01T00:00:00Z",
-            "claude", "src/a.rs", "url", "sha", 99999, 0, None,
+            "s",
+            "tok",
+            "dev",
+            "host",
+            "2026-01-01T00:00:00Z",
+            "claude",
+            "src/a.rs",
+            "url",
+            "sha",
+            99999,
+            0,
+            None,
         );
         assert_ne!(base_sig, tampered_sig);
     }
@@ -253,7 +287,9 @@ use crate::testkit::factories::{EditRecordFactory, ApiConfigFactory};
 
     #[test]
     fn compute_record_sig_empty_secret_still_produces_hex() {
-        let sig = compute_record_sig("", "tok", "dev", "host", "ts", "claude", "f", "url", "sha", 1, 0, None);
+        let sig = compute_record_sig(
+            "", "tok", "dev", "host", "ts", "claude", "f", "url", "sha", 1, 0, None,
+        );
         assert_eq!(sig.len(), 64);
     }
 }

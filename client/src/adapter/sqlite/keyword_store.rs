@@ -2,9 +2,9 @@
 // Keywords are stored in a separate encrypted DB to detect external tampering.
 // The authoritative source is always the hardcoded compile-time keywords.
 
+use crate::domain::keywords::keyword_fingerprint;
 use rusqlite::{Connection, Result};
 use std::path::Path;
-use crate::domain::keywords::keyword_fingerprint;
 
 const CREATE_KW_TABLE: &str = "
     CREATE TABLE IF NOT EXISTS kw_meta (
@@ -20,11 +20,13 @@ pub fn open_keyword_store(db_path: &Path) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
     conn.execute_batch(CREATE_KW_TABLE)?;
     let compiled_fp = keyword_fingerprint();
-    let stored_fp: Option<String> = conn.query_row(
-        "SELECT value FROM kw_meta WHERE key = 'fingerprint'",
-        [],
-        |row| row.get(0),
-    ).ok();
+    let stored_fp: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kw_meta WHERE key = 'fingerprint'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
     match stored_fp {
         Some(fp) if fp == compiled_fp => { /* fingerprint matches, keywords intact */ }
         _ => {
@@ -73,7 +75,11 @@ mod tests {
         let path = dir.path().join("keywords.db");
         open_keyword_store(&path).unwrap();
         let conn = Connection::open(&path).unwrap();
-        conn.execute("UPDATE kw_meta SET value = 'tampered' WHERE key = 'fingerprint'", []).unwrap();
+        conn.execute(
+            "UPDATE kw_meta SET value = 'tampered' WHERE key = 'fingerprint'",
+            [],
+        )
+        .unwrap();
         drop(conn);
         open_keyword_store(&path).unwrap();
         assert!(verify_keyword_integrity(&path));

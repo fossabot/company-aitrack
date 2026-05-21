@@ -12,7 +12,9 @@ fn seed_str(seed: u64, prefix: &str) -> String {
 fn seed_uuid(seed: u64) -> String {
     // Build a deterministic UUID-v4-shaped string from the seed.
     let a = seed;
-    let b = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let b = seed
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     format!(
         "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
         (a >> 32) as u32,
@@ -74,48 +76,104 @@ impl EditRecordFactory {
         }
     }
 
-    pub fn with_tool(mut self, v: &str) -> Self { self.tool = Some(v.to_string()); self }
-    pub fn with_provider(mut self, v: &str) -> Self { self.provider = Some(v.to_string()); self }
-    pub fn with_file_path(mut self, v: &str) -> Self { self.file_path = Some(v.to_string()); self }
-    pub fn with_added_lines(mut self, v: i64) -> Self { self.added_lines = Some(v); self }
-    pub fn with_removed_lines(mut self, v: i64) -> Self { self.removed_lines = Some(v); self }
-    pub fn with_diff_hunk(mut self, v: Option<String>) -> Self { self.diff_hunk = Some(v); self }
-    pub fn with_token_key(mut self, v: &str) -> Self { self.token_key = Some(v.to_string()); self }
-    pub fn with_device_id(mut self, v: &str) -> Self { self.device_id = Some(v.to_string()); self }
-    pub fn with_hostname(mut self, v: &str) -> Self { self.hostname = Some(v.to_string()); self }
-    pub fn with_record_sig(mut self, v: &str) -> Self { self.record_sig = Some(v.to_string()); self }
-    pub fn with_timestamp(mut self, v: &str) -> Self { self.timestamp = Some(v.to_string()); self }
-    pub fn with_repo_url(mut self, v: &str) -> Self { self.repo_url = Some(v.to_string()); self }
-    pub fn with_branch(mut self, v: &str) -> Self { self.branch = Some(v.to_string()); self }
-    pub fn with_current_sha(mut self, v: &str) -> Self { self.current_sha = Some(v.to_string()); self }
-    pub fn with_session_id(mut self, v: &str) -> Self { self.session_id = Some(v.to_string()); self }
-    pub fn with_prompt_summary(mut self, v: Option<String>) -> Self { self.prompt_summary = Some(v); self }
+    pub fn with_tool(mut self, v: &str) -> Self {
+        self.tool = Some(v.to_string());
+        self
+    }
+    pub fn with_provider(mut self, v: &str) -> Self {
+        self.provider = Some(v.to_string());
+        self
+    }
+    pub fn with_file_path(mut self, v: &str) -> Self {
+        self.file_path = Some(v.to_string());
+        self
+    }
+    pub fn with_added_lines(mut self, v: i64) -> Self {
+        self.added_lines = Some(v);
+        self
+    }
+    pub fn with_removed_lines(mut self, v: i64) -> Self {
+        self.removed_lines = Some(v);
+        self
+    }
+    pub fn with_diff_hunk(mut self, v: Option<String>) -> Self {
+        self.diff_hunk = Some(v);
+        self
+    }
+    pub fn with_token_key(mut self, v: &str) -> Self {
+        self.token_key = Some(v.to_string());
+        self
+    }
+    pub fn with_device_id(mut self, v: &str) -> Self {
+        self.device_id = Some(v.to_string());
+        self
+    }
+    pub fn with_hostname(mut self, v: &str) -> Self {
+        self.hostname = Some(v.to_string());
+        self
+    }
+    pub fn with_record_sig(mut self, v: &str) -> Self {
+        self.record_sig = Some(v.to_string());
+        self
+    }
+    pub fn with_timestamp(mut self, v: &str) -> Self {
+        self.timestamp = Some(v.to_string());
+        self
+    }
+    pub fn with_repo_url(mut self, v: &str) -> Self {
+        self.repo_url = Some(v.to_string());
+        self
+    }
+    pub fn with_branch(mut self, v: &str) -> Self {
+        self.branch = Some(v.to_string());
+        self
+    }
+    pub fn with_current_sha(mut self, v: &str) -> Self {
+        self.current_sha = Some(v.to_string());
+        self
+    }
+    pub fn with_session_id(mut self, v: &str) -> Self {
+        self.session_id = Some(v.to_string());
+        self
+    }
+    pub fn with_prompt_summary(mut self, v: Option<String>) -> Self {
+        self.prompt_summary = Some(v);
+        self
+    }
 
     pub fn build(self) -> Record {
         let s = self.seed;
         Record {
             id: 0,
             tool: self.tool.unwrap_or_else(|| "claude".to_string()),
-            tool_version: self.tool_version.unwrap_or_else(|| Some("claude-code".to_string())),
+            tool_version: self
+                .tool_version
+                .unwrap_or_else(|| Some("claude-code".to_string())),
             provider: self.provider.unwrap_or_else(|| "anthropic".to_string()),
             model: self.model.unwrap_or(None),
             session_id: self.session_id.unwrap_or_else(|| seed_uuid(s)),
-            repo_url: self.repo_url.unwrap_or_else(|| format!("git@github.com:org/repo-{s}.git")),
+            repo_url: self
+                .repo_url
+                .unwrap_or_else(|| format!("git@github.com:org/repo-{s}.git")),
             branch: self.branch.unwrap_or_else(|| "main".to_string()),
             current_sha: self.current_sha.unwrap_or_else(|| format!("{s:040x}")),
             file_path: self.file_path.unwrap_or_else(|| format!("src/file_{s}.rs")),
             added_lines: self.added_lines.unwrap_or((s % 50 + 1) as i64),
             removed_lines: self.removed_lines.unwrap_or((s % 20) as i64),
-            diff_hunk: self.diff_hunk.unwrap_or_else(|| {
-                Some(format!("@@ -1,1 +1,2 @@\n-old line\n+new line {s}\n"))
-            }),
+            diff_hunk: self
+                .diff_hunk
+                .unwrap_or_else(|| Some(format!("@@ -1,1 +1,2 @@\n-old line\n+new line {s}\n"))),
             metadata: None,
             synced: 0,
             synced_at: None,
             retry_count: 0,
-            timestamp: self.timestamp.unwrap_or_else(|| "2026-05-17T10:00:00Z".to_string()),
+            timestamp: self
+                .timestamp
+                .unwrap_or_else(|| "2026-05-17T10:00:00Z".to_string()),
             token_key: self.token_key.unwrap_or_else(|| seed_str(s, "tok")),
-            device_id: self.device_id.unwrap_or_else(|| seed_uuid(s.wrapping_add(1))),
+            device_id: self
+                .device_id
+                .unwrap_or_else(|| seed_uuid(s.wrapping_add(1))),
             hostname: self.hostname.unwrap_or_else(|| format!("host-{s:016x}")),
             record_sig: self.record_sig.unwrap_or_else(|| seed_str(s, "sig")),
             prompt_summary: self.prompt_summary.unwrap_or(None),
@@ -141,15 +199,33 @@ pub struct ApiConfigFactory {
 
 impl ApiConfigFactory {
     pub fn new(seed: u64) -> Self {
-        Self { seed, api_url: None, credential: None, device_id: None, hmac_secret: None }
+        Self {
+            seed,
+            api_url: None,
+            credential: None,
+            device_id: None,
+            hmac_secret: None,
+        }
     }
 
-    pub fn with_api_url(mut self, v: &str) -> Self { self.api_url = Some(v.to_string()); self }
+    pub fn with_api_url(mut self, v: &str) -> Self {
+        self.api_url = Some(v.to_string());
+        self
+    }
     /// Set the full combined credential `"<token>-<hmac_secret>"`.
-    pub fn with_credential(mut self, v: &str) -> Self { self.credential = Some(v.to_string()); self }
-    pub fn with_device_id(mut self, v: &str) -> Self { self.device_id = Some(v.to_string()); self }
+    pub fn with_credential(mut self, v: &str) -> Self {
+        self.credential = Some(v.to_string());
+        self
+    }
+    pub fn with_device_id(mut self, v: &str) -> Self {
+        self.device_id = Some(v.to_string());
+        self
+    }
     /// Convenience: only set the hmac_secret portion; the default seed-derived token is used.
-    pub fn with_hmac_secret(mut self, v: &str) -> Self { self.hmac_secret = Some(v.to_string()); self }
+    pub fn with_hmac_secret(mut self, v: &str) -> Self {
+        self.hmac_secret = Some(v.to_string());
+        self
+    }
 
     pub fn build(self) -> Config {
         let s = self.seed;
@@ -157,11 +233,15 @@ impl ApiConfigFactory {
         let credential = if let Some(c) = self.credential {
             c
         } else {
-            let secret = self.hmac_secret.unwrap_or_else(|| format!("secret-{s:016x}"));
+            let secret = self
+                .hmac_secret
+                .unwrap_or_else(|| format!("secret-{s:016x}"));
             format!("{default_token}-{secret}")
         };
         Config {
-            api_url: self.api_url.unwrap_or_else(|| format!("https://api-{s}.example.com")),
+            api_url: self
+                .api_url
+                .unwrap_or_else(|| format!("https://api-{s}.example.com")),
             credential,
             device_id: self.device_id.unwrap_or_else(|| seed_uuid(s)),
         }
@@ -193,20 +273,46 @@ pub struct ClaudeHookPayloadFactory {
 
 impl ClaudeHookPayloadFactory {
     pub fn new(seed: u64) -> Self {
-        Self { seed, session_id: None, old_string: None, new_string: None, file_path: None, model: None }
+        Self {
+            seed,
+            session_id: None,
+            old_string: None,
+            new_string: None,
+            file_path: None,
+            model: None,
+        }
     }
 
-    pub fn with_session_id(mut self, v: &str) -> Self { self.session_id = Some(v.to_string()); self }
-    pub fn with_old_string(mut self, v: &str) -> Self { self.old_string = Some(v.to_string()); self }
-    pub fn with_new_string(mut self, v: &str) -> Self { self.new_string = Some(v.to_string()); self }
-    pub fn with_file_path(mut self, v: &str) -> Self { self.file_path = Some(v.to_string()); self }
-    pub fn with_model(mut self, v: &str) -> Self { self.model = Some(v.to_string()); self }
+    pub fn with_session_id(mut self, v: &str) -> Self {
+        self.session_id = Some(v.to_string());
+        self
+    }
+    pub fn with_old_string(mut self, v: &str) -> Self {
+        self.old_string = Some(v.to_string());
+        self
+    }
+    pub fn with_new_string(mut self, v: &str) -> Self {
+        self.new_string = Some(v.to_string());
+        self
+    }
+    pub fn with_file_path(mut self, v: &str) -> Self {
+        self.file_path = Some(v.to_string());
+        self
+    }
+    pub fn with_model(mut self, v: &str) -> Self {
+        self.model = Some(v.to_string());
+        self
+    }
 
     pub fn build_json(self) -> String {
         let s = self.seed;
         let session_id = self.session_id.unwrap_or_else(|| seed_uuid(s));
-        let old = self.old_string.unwrap_or_else(|| format!("old content {s}"));
-        let new = self.new_string.unwrap_or_else(|| format!("new content {s}\nextra line"));
+        let old = self
+            .old_string
+            .unwrap_or_else(|| format!("old content {s}"));
+        let new = self
+            .new_string
+            .unwrap_or_else(|| format!("new content {s}\nextra line"));
         let file = self.file_path.unwrap_or_else(|| format!("src/file_{s}.rs"));
         let mut val = serde_json::json!({
             "session_id": session_id,
@@ -235,20 +341,46 @@ pub struct CodexHookPayloadFactory {
 
 impl CodexHookPayloadFactory {
     pub fn new(seed: u64) -> Self {
-        Self { seed, session_id: None, old_string: None, new_string: None, file_path: None, tool_name: None }
+        Self {
+            seed,
+            session_id: None,
+            old_string: None,
+            new_string: None,
+            file_path: None,
+            tool_name: None,
+        }
     }
 
-    pub fn with_session_id(mut self, v: &str) -> Self { self.session_id = Some(v.to_string()); self }
-    pub fn with_tool_name(mut self, v: &str) -> Self { self.tool_name = Some(v.to_string()); self }
-    pub fn with_old_string(mut self, v: &str) -> Self { self.old_string = Some(v.to_string()); self }
-    pub fn with_new_string(mut self, v: &str) -> Self { self.new_string = Some(v.to_string()); self }
-    pub fn with_file_path(mut self, v: &str) -> Self { self.file_path = Some(v.to_string()); self }
+    pub fn with_session_id(mut self, v: &str) -> Self {
+        self.session_id = Some(v.to_string());
+        self
+    }
+    pub fn with_tool_name(mut self, v: &str) -> Self {
+        self.tool_name = Some(v.to_string());
+        self
+    }
+    pub fn with_old_string(mut self, v: &str) -> Self {
+        self.old_string = Some(v.to_string());
+        self
+    }
+    pub fn with_new_string(mut self, v: &str) -> Self {
+        self.new_string = Some(v.to_string());
+        self
+    }
+    pub fn with_file_path(mut self, v: &str) -> Self {
+        self.file_path = Some(v.to_string());
+        self
+    }
 
     pub fn build_json(self) -> String {
         let s = self.seed;
         let session_id = self.session_id.unwrap_or_else(|| seed_uuid(s));
-        let old = self.old_string.unwrap_or_else(|| format!("old content {s}"));
-        let new = self.new_string.unwrap_or_else(|| format!("new content {s}"));
+        let old = self
+            .old_string
+            .unwrap_or_else(|| format!("old content {s}"));
+        let new = self
+            .new_string
+            .unwrap_or_else(|| format!("new content {s}"));
         let file = self.file_path.unwrap_or_else(|| format!("src/file_{s}.rs"));
         let tool = self.tool_name.unwrap_or_else(|| "Edit".to_string());
         serde_json::json!({
@@ -276,13 +408,31 @@ pub struct CursorHookPayloadFactory {
 
 impl CursorHookPayloadFactory {
     pub fn new(seed: u64) -> Self {
-        Self { seed, session_id: None, old_str: None, new_str: None, file_path: None }
+        Self {
+            seed,
+            session_id: None,
+            old_str: None,
+            new_str: None,
+            file_path: None,
+        }
     }
 
-    pub fn with_session_id(mut self, v: &str) -> Self { self.session_id = Some(v.to_string()); self }
-    pub fn with_old_str(mut self, v: &str) -> Self { self.old_str = Some(v.to_string()); self }
-    pub fn with_new_str(mut self, v: &str) -> Self { self.new_str = Some(v.to_string()); self }
-    pub fn with_file_path(mut self, v: &str) -> Self { self.file_path = Some(v.to_string()); self }
+    pub fn with_session_id(mut self, v: &str) -> Self {
+        self.session_id = Some(v.to_string());
+        self
+    }
+    pub fn with_old_str(mut self, v: &str) -> Self {
+        self.old_str = Some(v.to_string());
+        self
+    }
+    pub fn with_new_str(mut self, v: &str) -> Self {
+        self.new_str = Some(v.to_string());
+        self
+    }
+    pub fn with_file_path(mut self, v: &str) -> Self {
+        self.file_path = Some(v.to_string());
+        self
+    }
 
     pub fn build_json(self) -> String {
         let s = self.seed;
@@ -345,14 +495,16 @@ pub fn json_missing_tool_input(seed: u64) -> String {
 
 /// Codex payload with wrong hook_event_name (should be filtered out).
 pub fn codex_wrong_event(seed: u64) -> String {
-    let mut v: serde_json::Value = serde_json::from_str(&CodexHookPayloadFactory::new(seed).build_json()).unwrap();
+    let mut v: serde_json::Value =
+        serde_json::from_str(&CodexHookPayloadFactory::new(seed).build_json()).unwrap();
     v["hook_event_name"] = serde_json::Value::String("preToolUse".to_string());
     v.to_string()
 }
 
 /// Codex payload with non-edit tool_name (should be filtered out).
 pub fn codex_non_edit_tool(seed: u64) -> String {
-    let mut v: serde_json::Value = serde_json::from_str(&CodexHookPayloadFactory::new(seed).build_json()).unwrap();
+    let mut v: serde_json::Value =
+        serde_json::from_str(&CodexHookPayloadFactory::new(seed).build_json()).unwrap();
     v["tool_name"] = serde_json::Value::String("ListFiles".to_string());
     v.to_string()
 }
@@ -424,9 +576,7 @@ mod tests {
 
     #[test]
     fn edit_record_factory_no_diff_hunk() {
-        let rec = EditRecordFactory::new(5)
-            .with_diff_hunk(None)
-            .build();
+        let rec = EditRecordFactory::new(5).with_diff_hunk(None).build();
         assert!(rec.diff_hunk.is_none());
     }
 
@@ -443,7 +593,10 @@ mod tests {
             .build();
 
         assert_eq!(cfg.api_url, "https://custom.example.com");
-        assert_eq!(cfg.credential, "aitrack_customtoken12345-custom-hmac-secret");
+        assert_eq!(
+            cfg.credential,
+            "aitrack_customtoken12345-custom-hmac-secret"
+        );
         assert_eq!(cfg.device_id, "custom-device-id");
 
         // Verify split works
@@ -474,7 +627,10 @@ mod tests {
         // Verify credential is well-formed
         use crate::config::split_credential;
         let (token, secret) = split_credential(&cfg.credential).unwrap();
-        assert!(token.starts_with("aitrack_"), "token should start with aitrack_");
+        assert!(
+            token.starts_with("aitrack_"),
+            "token should start with aitrack_"
+        );
         assert!(!secret.is_empty(), "hmac_secret should not be empty");
     }
 
@@ -511,7 +667,10 @@ mod tests {
     fn malformed_json_is_invalid() {
         let json = malformed_json();
         let result = serde_json::from_str::<serde_json::Value>(&json);
-        assert!(result.is_err(), "malformed_json() must produce invalid JSON");
+        assert!(
+            result.is_err(),
+            "malformed_json() must produce invalid JSON"
+        );
     }
 
     #[test]
@@ -569,14 +728,32 @@ mod tests {
         let rec = tampered_expired_timestamp(5);
         let fresh_rec = EditRecordFactory::new(5).build();
         let sig_expired = compute_record_sig(
-            "secret", &rec.token_key, &rec.device_id, &rec.hostname, &rec.timestamp,
-            &rec.tool, &rec.file_path, &rec.repo_url, &rec.current_sha,
-            rec.added_lines, rec.removed_lines, rec.diff_hunk.as_deref(),
+            "secret",
+            &rec.token_key,
+            &rec.device_id,
+            &rec.hostname,
+            &rec.timestamp,
+            &rec.tool,
+            &rec.file_path,
+            &rec.repo_url,
+            &rec.current_sha,
+            rec.added_lines,
+            rec.removed_lines,
+            rec.diff_hunk.as_deref(),
         );
         let sig_fresh = compute_record_sig(
-            "secret", &fresh_rec.token_key, &fresh_rec.device_id, &fresh_rec.hostname, &fresh_rec.timestamp,
-            &fresh_rec.tool, &fresh_rec.file_path, &fresh_rec.repo_url, &fresh_rec.current_sha,
-            fresh_rec.added_lines, fresh_rec.removed_lines, fresh_rec.diff_hunk.as_deref(),
+            "secret",
+            &fresh_rec.token_key,
+            &fresh_rec.device_id,
+            &fresh_rec.hostname,
+            &fresh_rec.timestamp,
+            &fresh_rec.tool,
+            &fresh_rec.file_path,
+            &fresh_rec.repo_url,
+            &fresh_rec.current_sha,
+            fresh_rec.added_lines,
+            fresh_rec.removed_lines,
+            fresh_rec.diff_hunk.as_deref(),
         );
         // Expired and normal differ because timestamp differs
         assert_ne!(sig_expired, sig_fresh, "expired timestamp changes the sig");

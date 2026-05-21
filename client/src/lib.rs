@@ -6,10 +6,10 @@ pub mod git;
 pub mod heartbeat;
 pub mod init;
 pub mod port;
-pub mod update;
-pub mod uploader;
 #[cfg(test)]
 pub mod testkit;
+pub mod update;
+pub mod uploader;
 
 /// Crate-wide test synchronization for process-global state.
 #[cfg(test)]
@@ -39,11 +39,11 @@ pub fn print_banner() {
         "━".repeat(45)
     );
 }
-use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
 use adapter::sqlite::{
-    clean_all, clean_synced, inspect_records, insert_prompt_context, get_recent_prompt, open_db,
+    clean_all, clean_synced, get_recent_prompt, insert_prompt_context, inspect_records, open_db,
     pending_count, token_breakdown,
 };
+use config::{apply_init_args, load_config, mask_token, resolve_api_config, split_credential};
 use init::{detect_tool_statuses, install_hooks, remove_hooks};
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -102,9 +102,18 @@ async fn handle_init(args: cli::InitArgs) -> Result<()> {
 
     let (claude, codex, cursor) = detect_tool_statuses(&home);
     println!("Hook installation complete:");
-    println!("  claude: {}", if claude { "installed" } else { "not installed" });
-    println!("  codex:  {}", if codex { "installed" } else { "not installed" });
-    println!("  cursor: {}", if cursor { "installed" } else { "not installed" });
+    println!(
+        "  claude: {}",
+        if claude { "installed" } else { "not installed" }
+    );
+    println!(
+        "  codex:  {}",
+        if codex { "installed" } else { "not installed" }
+    );
+    println!(
+        "  cursor: {}",
+        if cursor { "installed" } else { "not installed" }
+    );
 
     if !cfg.api_url.is_empty() {
         println!("API URL: {}", cfg.api_url);
@@ -177,7 +186,10 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     let mut record = match record_opt {
         Some(r) => r,
         None => {
-            eprintln!("[aitrack] adapter returned no record for tool={}", args.tool);
+            eprintln!(
+                "[aitrack] adapter returned no record for tool={}",
+                args.tool
+            );
             return Ok(());
         }
     };
@@ -233,7 +245,8 @@ async fn handle_capture(args: cli::CaptureArgs) -> Result<()> {
     let inserted = adapter::sqlite::insert_record(&conn, &record)?;
 
     if inserted && !api_url.is_empty() && !credential.is_empty() {
-        let http_uploader = adapter::http::upload::HttpUploader::new(api_url.clone(), credential.clone());
+        let http_uploader =
+            adapter::http::upload::HttpUploader::new(api_url.clone(), credential.clone());
         uploader::flush_unsynced(&conn, &http_uploader).await?;
 
         // Throttled heartbeat
@@ -280,7 +293,15 @@ fn handle_inspect(args: cli::InspectArgs) -> Result<()> {
         };
         println!(
             "{:<6} {:<10} {:<20} {:<40} {:>5} {:>5} {:>6} {:>5} {:<20}",
-            r.id, r.tool, model, file, r.added_lines, r.removed_lines, r.synced, r.retry_count, r.timestamp
+            r.id,
+            r.tool,
+            model,
+            file,
+            r.added_lines,
+            r.removed_lines,
+            r.synced,
+            r.retry_count,
+            r.timestamp
         );
     }
 
@@ -318,9 +339,30 @@ fn handle_status() -> Result<()> {
     let home = dirs::home_dir().expect("cannot find home directory");
     let (claude, codex, cursor) = detect_tool_statuses(&home);
 
-    println!("API URL:      {}", if cfg.api_url.is_empty() { "(not set)" } else { &cfg.api_url });
-    println!("Token:        {}", if cfg.credential.is_empty() { "(not set)" } else { &token_key });
-    println!("Device ID:    {}", if cfg.device_id.is_empty() { "(not set)" } else { &cfg.device_id });
+    println!(
+        "API URL:      {}",
+        if cfg.api_url.is_empty() {
+            "(not set)"
+        } else {
+            &cfg.api_url
+        }
+    );
+    println!(
+        "Token:        {}",
+        if cfg.credential.is_empty() {
+            "(not set)"
+        } else {
+            &token_key
+        }
+    );
+    println!(
+        "Device ID:    {}",
+        if cfg.device_id.is_empty() {
+            "(not set)"
+        } else {
+            &cfg.device_id
+        }
+    );
     println!("Pending sync: {pending}");
     println!(
         "Hooks:        claude={} codex={} cursor={}",
@@ -398,12 +440,8 @@ async fn handle_prompt_capture(args: cli::PromptCaptureArgs) -> Result<()> {
         }
     };
 
-    let session_id = val.get("session_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let prompt = val.get("prompt")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let session_id = val.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
+    let prompt = val.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
 
     if session_id.is_empty() || prompt.is_empty() {
         return Ok(());
@@ -476,7 +514,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
             handle_stats().unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -486,9 +525,14 @@ mod tests {
     async fn run_inspect_empty_db() {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
-            let args = cli::InspectArgs { limit: 20, pending: false, current_token: false };
+            let args = cli::InspectArgs {
+                limit: 20,
+                pending: false,
+                current_token: false,
+            };
             handle_inspect(args).unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -498,9 +542,14 @@ mod tests {
     async fn run_inspect_pending_and_current_token() {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
-            let args = cli::InspectArgs { limit: 10, pending: true, current_token: true };
+            let args = cli::InspectArgs {
+                limit: 10,
+                pending: true,
+                current_token: true,
+            };
             handle_inspect(args).unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -511,7 +560,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
             handle_status().unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -521,8 +571,13 @@ mod tests {
     async fn run_clean_force_all() {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
-            handle_clean(cli::CleanArgs { all: true, force: true }).unwrap();
-        }).await;
+            handle_clean(cli::CleanArgs {
+                all: true,
+                force: true,
+            })
+            .unwrap();
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -532,8 +587,13 @@ mod tests {
     async fn run_clean_force_synced_only() {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
-            handle_clean(cli::CleanArgs { all: false, force: true }).unwrap();
-        }).await;
+            handle_clean(cli::CleanArgs {
+                all: false,
+                force: true,
+            })
+            .unwrap();
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -546,7 +606,8 @@ mod tests {
             std::env::remove_var("AITRACK_API_URL");
             std::env::remove_var("AITRACK_API_TOKEN");
             handle_heartbeat().await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -558,7 +619,8 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "stats"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -570,7 +632,8 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "inspect"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -582,7 +645,8 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "status"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -594,7 +658,8 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "clean", "--force", "--all"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -617,7 +682,8 @@ mod tests {
             // test context so it will parse error and return Ok.
             let cli = Cli::parse_from(["aitrack", "prompt-capture"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -631,7 +697,8 @@ mod tests {
             std::env::remove_var("AITRACK_API_TOKEN");
             let cli = Cli::parse_from(["aitrack", "heartbeat"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -641,9 +708,14 @@ mod tests {
     async fn run_inspect_limit_clamped() {
         let dir = TempDir::new().unwrap();
         with_home_async(&dir, || async {
-            let args = cli::InspectArgs { limit: 500, pending: false, current_token: false };
+            let args = cli::InspectArgs {
+                limit: 500,
+                pending: false,
+                current_token: false,
+            };
             handle_inspect(args).unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -670,7 +742,8 @@ mod tests {
                 credential: None,
             };
             handle_init(args).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -700,7 +773,8 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "init"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 
     // -------------------------------------------------------------------------
@@ -712,6 +786,7 @@ mod tests {
         with_home_async(&dir, || async {
             let cli = Cli::parse_from(["aitrack", "clean", "--force"]);
             run(cli).await.unwrap();
-        }).await;
+        })
+        .await;
     }
 }

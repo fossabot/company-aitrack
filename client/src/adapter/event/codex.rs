@@ -1,7 +1,7 @@
+use crate::domain::diff::compute_diff;
+use crate::domain::model::Record;
 use serde::Deserialize;
 use serde_json::Value;
-use crate::domain::model::Record;
-use crate::domain::diff::compute_diff;
 
 #[derive(Debug, Deserialize)]
 struct CodexToolInput {
@@ -35,7 +35,10 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         return None;
     }
     let tool_name = payload.tool_name.as_deref().unwrap_or("");
-    if !tool_name.contains("Edit") && !tool_name.contains("Write") && !tool_name.contains("apply_patch") {
+    if !tool_name.contains("Edit")
+        && !tool_name.contains("Write")
+        && !tool_name.contains("apply_patch")
+    {
         return None;
     }
 
@@ -65,7 +68,11 @@ pub fn parse(stdin_json: &str) -> Option<Record> {
         file_path,
         added_lines: diff.added,
         removed_lines: diff.removed,
-        diff_hunk: if diff.hunk.is_empty() { None } else { Some(diff.hunk) },
+        diff_hunk: if diff.hunk.is_empty() {
+            None
+        } else {
+            Some(diff.hunk)
+        },
         metadata,
         synced: 0,
         synced_at: None,
@@ -105,8 +112,7 @@ fn build_metadata(
 mod tests {
     use super::parse;
     use crate::testkit::factories::{
-        CodexHookPayloadFactory, malformed_json,
-        codex_wrong_event, codex_non_edit_tool,
+        codex_non_edit_tool, codex_wrong_event, malformed_json, CodexHookPayloadFactory,
     };
 
     #[test]
@@ -176,7 +182,8 @@ mod tests {
                 "new_string": "b\n",
                 "file_path": "src/meta.rs"
             }
-        }).to_string();
+        })
+        .to_string();
         let rec = parse(&json).expect("should parse with metadata");
         let meta = rec.metadata.expect("should have metadata");
         assert!(meta.contains("gen-abc123"));

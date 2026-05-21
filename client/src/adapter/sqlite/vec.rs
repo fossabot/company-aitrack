@@ -75,7 +75,10 @@ mod tests {
         let original = VEC_DISABLED.load(Ordering::Relaxed);
 
         VEC_DISABLED.store(true, Ordering::Relaxed);
-        assert!(!is_vec_enabled(), "should report disabled when flag is true");
+        assert!(
+            !is_vec_enabled(),
+            "should report disabled when flag is true"
+        );
 
         VEC_DISABLED.store(false, Ordering::Relaxed);
         assert!(is_vec_enabled(), "should report enabled when flag is false");
@@ -109,9 +112,15 @@ mod tests {
         init_sqlite_vec(&conn);
 
         if vec_present {
-            assert!(is_vec_enabled(), "flag should stay enabled when extension is present");
+            assert!(
+                is_vec_enabled(),
+                "flag should stay enabled when extension is present"
+            );
         } else {
-            assert!(!is_vec_enabled(), "flag should be disabled when extension absent");
+            assert!(
+                !is_vec_enabled(),
+                "flag should be disabled when extension absent"
+            );
         }
 
         VEC_DISABLED.store(original, Ordering::Relaxed);

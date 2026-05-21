@@ -80,7 +80,10 @@ pub struct HttpUploader {
 
 impl HttpUploader {
     pub fn new(api_url: String, credential: String) -> Self {
-        Self { api_url, credential }
+        Self {
+            api_url,
+            credential,
+        }
     }
 
     /// Build the JSON payload from a slice of `Record`s.
@@ -121,11 +124,7 @@ impl HttpUploader {
     ///
     /// Used by `uploader::flush_unsynced` so that it can apply the full
     /// accepted / rejected / flagged DB bookkeeping.
-    pub async fn post_batch(
-        &self,
-        records: &[Record],
-        device_id: &str,
-    ) -> PostBatchResult {
+    pub async fn post_batch(&self, records: &[Record], device_id: &str) -> PostBatchResult {
         if self.api_url.starts_with("http://") {
             eprintln!(
                 "[aitrack] WARNING: api_url uses plaintext HTTP; token will be sent unencrypted"
@@ -174,12 +173,10 @@ impl HttpUploader {
         }
 
         match req.send().await {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<UploadResponse>().await {
-                    Ok(ur) => PostBatchResult::Success(ur),
-                    Err(_) => PostBatchResult::UnparseableOk,
-                }
-            }
+            Ok(resp) if resp.status().is_success() => match resp.json::<UploadResponse>().await {
+                Ok(ur) => PostBatchResult::Success(ur),
+                Err(_) => PostBatchResult::UnparseableOk,
+            },
             Ok(resp) => {
                 eprintln!("[aitrack] upload failed: HTTP {}", resp.status());
                 PostBatchResult::TransientError
@@ -264,11 +261,11 @@ impl UploadPort for HttpUploader {
 
 #[cfg(test)]
 mod tests {
-    use wiremock::{Mock, MockServer, ResponseTemplate};
     use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use crate::testkit::factories::EditRecordFactory;
     use super::{HttpUploader, PostBatchResult};
+    use crate::testkit::factories::EditRecordFactory;
 
     // ── Credential constant used across tests ─────────────────────────────────
     /// Token = "aitrack_testtoken12345", hmac_secret = "testhmacsecret"
@@ -347,13 +344,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "accepted": 2,
-                    "rejected": [],
-                    "flagged": []
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 2,
+                "rejected": [],
+                "flagged": []
+            })))
             .mount(&mock_server)
             .await;
 
@@ -376,9 +371,7 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string("not-json"),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string("not-json"))
             .mount(&mock_server)
             .await;
 
@@ -476,13 +469,11 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/v1/ai-track/edits"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "accepted": 1,
-                    "rejected": [],
-                    "flagged": []
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "accepted": 1,
+                "rejected": [],
+                "flagged": []
+            })))
             .mount(&mock_server)
             .await;
 

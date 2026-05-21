@@ -230,7 +230,10 @@ mod tests {
         }
 
         let after = fetch_unsynced(&conn, "tok-retry", 100).unwrap();
-        assert!(after.is_empty(), "retry_count=5 should be excluded from fetch");
+        assert!(
+            after.is_empty(),
+            "retry_count=5 should be excluded from fetch"
+        );
     }
 
     #[test]
@@ -284,7 +287,11 @@ mod tests {
     #[test]
     fn inspect_records_returns_rows() {
         let conn = open_test_db();
-        insert_record(&conn, &make_record("claude", "src/inspect.rs", "tok-inspect")).unwrap();
+        insert_record(
+            &conn,
+            &make_record("claude", "src/inspect.rs", "tok-inspect"),
+        )
+        .unwrap();
 
         let rows = inspect_records(&conn, 10, false, "").unwrap();
         assert_eq!(rows.len(), 1);

@@ -1,5 +1,5 @@
-use clap::Parser;
 use aitrack::cli::Cli;
+use clap::Parser;
 
 #[tokio::main]
 async fn main() {
