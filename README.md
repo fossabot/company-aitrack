@@ -67,7 +67,7 @@ aitrack 由三个独立组件构成，通过协议 v1.2 互通：
 |------|--------|------|
 | **Rust 客户端** `aitrack` | Rust · single binary · 无运行时依赖 | 安装钩子、捕获编辑事件、HMAC 签名、上报数据 |
 | **Java 服务端** `aitrack-server` | Java 17 · Spring Boot 3.3.8 · H2 / PostgreSQL | 10 步校验链、可信归因、效能查询（主推实现） |
-| **Go 服务端** `aitrack-server-go` | Go 1.24 · chi v5.2.5 · SQLite / PostgreSQL | 与 Java 端功能对等的轻量备选实现 |
+| **Go 服务端** `aitrack-server-go` | Go 1.25 · chi v5.2.5 · SQLite / PostgreSQL | 与 Java 端功能对等的轻量备选实现 |
 
 **协议 v1.2 关键设计：**
 
@@ -208,7 +208,7 @@ bash e2e/run.sh both
 | **token 哈希存储** | 服务端仅存储 `sha256(token)`，明文仅签发时返回一次 |
 | **本地优先** | 所有数据存储于自建服务，不经过任何第三方云服务 |
 | **常量时间比较** | HMAC 验证使用常量时间比较，防止 timing attack |
-| **最小采集** | 仅采集文件路径、diff、行数、repo 元数据，不收集代码内容、对话或键盘输入 |
+| **最小采集** | 采集文件路径、变更 diff（unified diff 格式，仅变更行，非完整文件内容）、行数统计和 repo 元数据；不采集 prompt 内容、对话记录、键盘输入 |
 
 ---
 
