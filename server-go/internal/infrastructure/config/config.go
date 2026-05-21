@@ -18,7 +18,6 @@ type Config struct {
 	} `yaml:"server"`
 
 	DB struct {
-		Path        string `yaml:"path"`
 		DatabaseURL string `yaml:"database_url"`
 	} `yaml:"db"`
 
@@ -58,7 +57,6 @@ func Load(path string) (*Config, error) {
 func defaults() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8080
-	cfg.DB.Path = "./data/aitrack.db"
 	cfg.TimestampWindowSeconds = 300
 	cfg.RateLimitPerHour = 30
 	cfg.MaxAddedLines = 5000
@@ -77,9 +75,6 @@ func applyEnv(cfg *Config) {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Server.Port = p
 		}
-	}
-	if v := os.Getenv("AITRACK_DB_PATH"); v != "" {
-		cfg.DB.Path = v
 	}
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		cfg.DB.DatabaseURL = v

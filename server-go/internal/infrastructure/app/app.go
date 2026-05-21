@@ -18,7 +18,11 @@ import (
 // Build wires all dependencies and returns an http.Handler ready to serve.
 // The caller owns closing the DB.
 func Build(cfg *config.Config) (http.Handler, func(), error) {
-	database, err := db.Open(cfg.DB.Path, db.WithDatabaseURL(cfg.DB.DatabaseURL))
+	if cfg.DB.DatabaseURL == "" {
+		return nil, nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	database, err := db.Open(cfg.DB.DatabaseURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open db: %w", err)
 	}
@@ -55,16 +59,14 @@ func Build(cfg *config.Config) (http.Handler, func(), error) {
 	heartbeatSvc := application.NewHeartbeatService(deviceAdapter)
 	statsSvc := application.NewStatsService(editAdapter, deviceAdapter)
 
-	isPostgres := cfg.DB.DatabaseURL != ""
-
 	// Driving adapters (HTTP).
 	auth := handler.NewAuthMiddleware(tokenSvc, sig, cfg)
 	adminH := handler.NewAdminHandler(tokenSvc, cfg)
 	editsH := handler.NewEditsHandler(auth, ingestSvc)
 	hbH := handler.NewHeartbeatHandler(auth, heartbeatSvc)
 	statsH := handler.NewStatsHandler(auth, statsSvc)
-	searchH := handler.NewSearchHandler(database, cfg.AdminKey, isPostgres)
-	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, isPostgres)
+	searchH := handler.NewSearchHandler(database, cfg.AdminKey, true)
+	similarH := handler.NewSimilarHandler(database, cfg.AdminKey, true)
 	profileH := handler.NewProfileHandler(database, cfg.AdminKey)
 
 	return handler.NewRouter(adminH, editsH, hbH, statsH, searchH, similarH, profileH), cleanup, nil

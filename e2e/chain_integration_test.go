@@ -1,25 +1,32 @@
 // chain_integration_test.go — real Go server chain integration test.
 //
-// Uses the actual chi router wired to an in-memory SQLite database.
+// Uses the actual chi router wired to a PostgreSQL/ParadeDB database.
 // No real credentials are required; the test issues its own token via the
 // admin endpoint, builds correctly-signed payloads, and drives the full
 // 10-step validation chain end-to-end.
+//
+// Requires TEST_DATABASE_URL to point to a reachable PostgreSQL instance.
+// If the env var is absent the test is skipped gracefully.
 package e2e
 
 import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/aitrack/server/testapp"
 )
@@ -30,11 +37,30 @@ const (
 	integrationAdminKey = "integration-test-admin-key"
 )
 
-// newIntegrationConfig returns a Config that uses in-memory SQLite and a known
-// admin key. SecretKey is intentionally empty so the encryptor runs in dev mode
-// (plain-prefix storage) — no crypto infrastructure required.
+func integrationDSN() string {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		return "postgres://aitrack:aitrack_secret@localhost:5432/aitrack_test?sslmode=disable"
+	}
+	return dsn
+}
+
+// newIntegrationConfig returns a Config that uses a live PostgreSQL/ParadeDB
+// instance and a known admin key. SecretKey is intentionally empty so the
+// encryptor runs in dev mode (plain-prefix storage) — no crypto infrastructure
+// required.
 func newIntegrationConfig() *testapp.Config {
-	return testapp.MemoryConfig(integrationAdminKey)
+	return testapp.TestConfig(integrationDSN(), integrationAdminKey)
+}
+
+func TestMain(m *testing.M) {
+	conn, err := sql.Open("pgx", integrationDSN())
+	if err != nil || conn.Ping() != nil {
+		fmt.Println("SKIP: TEST_DATABASE_URL not reachable, skipping E2E integration tests")
+		os.Exit(0) // skip but pass
+	}
+	conn.Close()
+	os.Exit(m.Run())
 }
 
 // ─── HMAC signing helpers (mirror of factory.go, self-contained) ─────────────
@@ -232,7 +258,7 @@ func buildIntegrationBatch(cred credBundle, deviceID string, n int) []byte {
 
 // ─── TestRealChainIntegration ─────────────────────────────────────────────────
 
-// TestRealChainIntegration drives the real Go server (chi router + in-memory SQLite)
+// TestRealChainIntegration drives the real Go server (chi router + PostgreSQL/ParadeDB)
 // through the complete request lifecycle:
 //
 //  1. Build real server via app.Build (in-memory SQLite, dev-mode encryptor)
@@ -250,7 +276,7 @@ func buildIntegrationBatch(cred credBundle, deviceID string, n int) []byte {
 //     – persistence (step 10)
 //  5. GET /api/v1/ai-track/profiles/{token_key} → verify total_records > 0
 func TestRealChainIntegration(t *testing.T) {
-	// Step 1: build real server with in-memory SQLite.
+	// Step 1: build real server with PostgreSQL/ParadeDB.
 	cfg := newIntegrationConfig()
 	router, cleanup, err := testapp.Build(cfg)
 	if err != nil {

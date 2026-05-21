@@ -20,24 +20,21 @@ type Config = config.Config
 // Build wires all dependencies and returns an http.Handler ready to serve.
 // The returned cleanup function must be called when the handler is no longer
 // needed (it closes the database).
-//
-// Pass a *Config with DB.Path = ":memory:" and an empty SecretKey to get an
-// in-memory SQLite server running in dev-mode (no real encryption key needed).
 func Build(cfg *Config) (http.Handler, func(), error) {
 	return app.Build(cfg)
 }
 
-// MemoryConfig returns a *Config suitable for integration tests:
-//   - In-memory SQLite (no files created)
+// TestConfig returns a *Config suitable for integration tests against a live
+// PostgreSQL/ParadeDB instance:
+//   - Uses the provided databaseURL (e.g. TEST_DATABASE_URL)
 //   - Dev-mode encryptor (empty SecretKey → plain: prefix storage)
 //   - A caller-supplied admin key (used for /admin/tokens and /profiles endpoints)
 //   - Permissive rate-limit and size limits
 //   - Repo whitelist enforcement disabled
-func MemoryConfig(adminKey string) *Config {
+func TestConfig(databaseURL, adminKey string) *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 0
-	cfg.DB.Path = ":memory:"
-	cfg.DB.DatabaseURL = ""
+	cfg.DB.DatabaseURL = databaseURL
 	cfg.SecretKey = ""       // dev mode: plain-prefix storage
 	cfg.AdminKey = adminKey
 	cfg.TimestampWindowSeconds = 300
